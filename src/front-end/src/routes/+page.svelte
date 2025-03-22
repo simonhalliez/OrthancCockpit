@@ -4,6 +4,7 @@
 	import CenteredWindow from '../components/CenteredWindow.svelte';
 	import { goto } from "$app/navigation";
 	import { network } from '../store/network';
+	import axios from 'axios';
 
 	let showAddServer = false;
 	let showAddLink = false;
@@ -28,24 +29,27 @@
 	let addLinkValues = { ...initialAddLinkValues };
 
 	function addServer() {
-		network.update(net => {
-			net.nodes.push(addServerValues);
-			
-			return net;
-		});
-		showAddServer = false;
-		addServerValues = { ...initialAddServerValues };
+		axios.post('http://192.168.129.92:3002/add_Orthanc_server', addServerValues)
+			.then(response => {
+				network.updateNetwork();
+				showAddServer = false;
+				addServerValues = { ...initialAddServerValues };
+			})
+			.catch(error => {
+				alert(error);
+			});
+		
 	}
 
 	function addLink() {
-		console.log(addLinkValues);
-		network.update(net => {
-			net.edges.push(addLinkValues);
-			
-			return net;
-		});
-		showAddLink = false;
-		addLinkValues = { ...initialAddLinkValues };
+		axios.post('http://192.168.129.92:3002/add_edge', addLinkValues)
+			.then(response => {
+				network.updateNetwork();
+				showAddLink = false;
+				addLinkValues = { ...initialAddLinkValues };
+			}) .catch(error => {
+				alert(error);
+			});
 	}
 </script>
 
@@ -54,7 +58,9 @@
 <!-- Header-->
 <header class="py-6 bg-blue-900">
 	<div class="grid grid-flow-col gap-4 px-8">
-		<img src="/OrthancLogo.png" alt="logo" class="w-1/3 h-auto">
+		<button type="button" on:click={()=> { network.updateNetwork();}} style="cursor: pointer; background: none; border: none; padding: 0;">
+			<img src="/OrthancLogo.png" alt="logo" class="w-1/3 h-auto">
+		</button>
 		<ButtonHeader text="Add a server" onClick={()=> showAddServer=true}/>
 		<CenteredWindow bind:showModal={showAddServer} header="Add an Orthanc server">
 			<div slot="form">
