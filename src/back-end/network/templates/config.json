@@ -1,0 +1,13 @@
+{
+    "Name": "",
+    "DicomAet": "",
+    "DicomPort": 0,
+    "HttpPort": 0,
+    "RemoteAccessAllowed": true,
+    "HttpServerEnabled": true,
+    "DicomAlwaysAllowEcho" : true,
+    "DicomTlsEnabled" : false,
+    "RegisteredUsers" : {
+        "admin" : "${ADMIN_PASSWORD}"
+    }
+}

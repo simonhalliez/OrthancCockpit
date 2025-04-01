@@ -1,155 +1,160 @@
 const axios = require("axios");
-var products = require('nano')(process.env.PRODUCT_DB_URL)
 const log = require('debug')('product-d')
-var user_auth_url = (process.env.USER_AUTH_URL)
+const neo4j = require('neo4j-driver');
+const { spawn } = require('child_process');
 
+class Neo4jDriver {
+  constructor(DB_IP, PASSWORD) {
+    this.DB_IP = DB_IP;
+    this.PASSWORD = PASSWORD;
+    this.URI = `neo4j://${this.DB_IP}`;
+    this.USER = 'neo4j';
+    this.driver = null;
+  }
 
-const logging_url = (process.env.LOGGING_URL)
+  connect() {
+    try {
+      this.driver = neo4j.driver(this.URI, neo4j.auth.basic(this.USER, this.PASSWORD));
+    } catch (err) {
+      console.log(`Connection error\n${err}\nCause: ${err.cause}`);
+      this.driver.close();
+      return;
+    }
+  }
 
-// Send log to the logging micro service.
-function sendLogs(log_send) {
-  new Promise((resolve, reject) => {
-    log(`${logging_url}/addLog`)
-    axios.post(`${logging_url}/addLog`, {
-          log: log_send
+  addInitialSwarmNode() {
+    // Retrieve the list of nodes in the swarm.
+    const dockerNodesProcess = spawn('docker', [
+      'node', 'ls', '--format', 'json'
+    ]);
+    let swarmNodes = [];
+    dockerNodesProcess.stdout.on('data', async (data) => {
+      swarmNodes = data.toString().split('\n').filter((line) => line !== '').map((jsonString) => JSON.parse(jsonString));
+    })
+    dockerNodesProcess.stderr.on('data', (data) => {
+      throw new Error(`Error list docker nodes: ${data.toString()}`);
+    });
+    dockerNodesProcess.on('error', (error) => {
+      throw new Error(`Error list docker nodes: ${error.message}`);
+    });
+    dockerNodesProcess.on('close', async (code) => {
+      // Retrieve the IP address of each node in the swarm.
+      for (const node of swarmNodes) {
+        const dockerNodeIPProcess = spawn('docker', [
+          'inspect', node.ID, '--format', '{{ .Status.Addr }}'
+        ]);
+        dockerNodeIPProcess.stdout.on('data', async (ipData) => {
+          // Add the node to the database.
+          await this.driver.executeQuery(`
+              MERGE (n:SwarmNode {id: $id}) 
+              SET n.ip = $ip, n.name = $name, n.status = $status, n.role = $role 
+              RETURN n`,
+              {
+                id: node.ID,
+                ip: ipData.toString().trim(),
+                name: node.Hostname,
+                status: node.Status,
+                role: node.ManagerStatus
+              }
+            )
         })
-        .then((res) => {
-          log("Success to add logs.")
-        })
-        .catch((err) => {
-          log("Error when adding logs")
+        dockerNodeIPProcess.stderr.on('data', (ipError) => {
+          throw new Error(`Error IP recover: ${ipError.toString()}`);
         });
       }
-    )
-}
-
-// Create a log and send it.
-function add_logs(product, action) {
-  const log_send = {
-    "microservice": "admin",
-    "action": action,
-    "product": product,
-    "date": new Date()
-  }
-  sendLogs(log_send);
-  
-}
-
-// Ask to the authentification micro service if the token is one of an admin.
-async function isAdmin(token) {
-  return new Promise((resolve, reject) => {
-    axios
-    .get(`${user_auth_url}/isAdmin/${token}`)
-    .then((res) => {
-      log(`Result of request ${typeof(res.data.token.isAdmin)}`)
-      resolve(res.data.token.isAdmin)
-    })
-    .catch((err) => {
-      log(err)
-      reject(err)
     });
-  })
-}
-
-// Insert a product the product data base.
-function createProduct (product, productcat, productprice, productimg, productDesc) {
-  const created_product = { "name": product,
-    "category": productcat,
-    "price": productprice,
-    "image": productimg,
-    "description": productDesc
   }
-  add_logs(created_product,"CreateProduct");
-  return new Promise((resolve, reject) => {
-    products.insert(
-      created_product,
-      product,
-      // callback to execute once the request to the DB is complete
-      (error, success) => {
-        if (success) {
-          resolve(success.token)
-        } else {
-          reject(
-            new Error(`In the creation of product (${product}). Reason: ${error.reason}.`)
-          )
+
+  async addOrthancServer(reqBody) {
+    reqBody.visX = 0.0;
+    reqBody.visY = 0.0;
+    // Adding the Orthanc server to the database.
+    let session = this.driver.session();
+    await session.executeWrite( async (tx) => {
+      // Check if the node exists in the database.
+      let nodeResult = await tx.run(
+        'MATCH (n:SwarmNode {name: $name}) RETURN n',
+        { name: reqBody.hostNameSwarm }
+      )
+      if (nodeResult.records.length === 0) {
+        throw new Error(`No node found with name ${reqBody.hostNameSwarm}`);
+      }
+      if (nodeResult.records.length > 1) {
+        throw new Error(`Multiple nodes found with name ${reqBody.hostNameSwarm}`);
+      }
+      // Create the Orthanc server node in DB.
+      await tx.run(`
+        MERGE (o:OrthancServer {aet: $aet}) 
+        SET o.orthancName = $orthancName, 
+        o.hostNameSwarm = $hostNameSwarm, 
+        o.portWeb = $portWeb, 
+        o.portDicom = $portDicom, 
+        o.status = $status, 
+        o.visX = $visX, 
+        o.visY = $visY`,
+        reqBody
+      )
+      // Create the relationship between the Orthanc server and the Swarm node.
+      tx.run(`
+        MATCH (n:SwarmNode {name: $name})
+        MATCH (o:OrthancServer {aet: $aet})
+        MERGE (o)-[:RUNNING]->(n)
+        `,
+        {
+          name: reqBody.hostNameSwarm,
+          aet: reqBody.aet
         }
-      }
-    )
-  })
-}
+      )
+    })
+    await session.close();
 
-// Recover the list of product of the product data base.
-function getProduct () {
-  return new Promise((resolve, reject) => {
-    // Process the request to the product server
-    products.list({ include_docs: true },
-      ((error, success) => {
-      if (success) {
-        var map_by_category = {};
-        for(const p of success.rows.map(row => row.doc)) {
-            var cat = p["category"]
-            if(!(cat in map_by_category)) {
-              map_by_category[cat] = []
-            }
-            p["id"] = p["_id"]
-            map_by_category[cat].push(p)
-        }
-        resolve(map_by_category)
-      } else {
-        reject(new Error(`Error GET products: ${error.reason}`))
-      }
-    }))
-  })
-}
-
-// Delete a product in the product data base.
-function deleteProduct(_id, _rev) {
-  add_logs(_id, "DeleteProduct")
-  return new Promise((resolve, reject) => {
-    // Process the request to the product server
-    products.destroy(_id, _rev,
-      ((error, success) => {
-      if (success) {
-        resolve(success)
-      } else {
-        reject(new Error(`Error when DELETE products ${_id}: ${error.reason}`))
-      }
-    }))
-  })
-}
-
-// Update a product in the product database.
-function updateProduct(product, productcat, productprice, productimg, rev, _id, productdesc) {
-  product_update = {"_id": _id,
-    "_rev": rev,
-    "name": product,
-    "category": productcat,
-    "price": productprice,
-    "image": productimg,
-    "description": productdesc
+    // Create the Orthanc service for new server.
+    const child = spawn('bash', [
+      'orthancManager.sh',
+      'new_server',
+      reqBody.orthancName,
+      reqBody.aet,
+      reqBody.hostNameSwarm,
+      `${reqBody.portWeb}:80`,
+      `${reqBody.portDicom}:4343`
+    ]);
+    
+    child.stderr.on('data', (data) => {
+      log(`stderr: ${data}`);
+    });
+    child.on('error', (error) => {
+      log(`error: ${error.message}`);
+    });
+    child.on('close', (code) => {
+      log(`child process exited with code ${code}`);
+    });
   }
-  add_logs(product_update, "UpdateProduct")
-  return new Promise((resolve, reject) => {
-    // Process the request to the product server
-    products.insert(
-      product_update,
-      (error, success) => {
-        if (success) {
-          resolve(success.token)
-        } else {
-          reject(
-            new Error(`In the modification of product (${product}). Reason: ${error.reason}.`)
-          )
-        }
-      }
-    );
-  })
+
+  async updateSwarmNodes() {
+    const dockerEvents = spawn('docker', [
+      'events',
+      '--filter', 'scope=swarm',
+      '--filter', 'type=node',
+      '--format', 'json'
+    ]);
+    
+    dockerEvents.stdout.on('data', (data) => {
+      log(data.toString());
+      const nodeEvent = JSON.parse(data);
+      
+    });
+    dockerEvents.stderr.on('data', (data) => {
+      log(`Error: ${data.toString()}`);
+    });
+    dockerEvents.on('error', (error) => {
+      log(`Error: ${error.message}`);
+    })
+    dockerEvents.on('close', (code) => {
+      log(`Docker events listener for swarm exited with code ${code}`);
+    });
+  }
 }
 
 module.exports = {
-  createProduct,
-  getProduct,
-  deleteProduct,
-  updateProduct,
-  isAdmin
+  Neo4jDriver
 }

@@ -3,6 +3,8 @@
     import { onMount, onDestroy } from 'svelte';
     import { network } from '../store/network';
     import Details from './Details.svelte';
+    import axios from 'axios';
+    import { env } from "$env/dynamic/public";
 
     type BaseNode = {
         aet: string;
@@ -28,6 +30,7 @@
         from: string;
         to: string;
         status: boolean;
+        id: string;
     };
 
     type Network = {
@@ -35,6 +38,7 @@
         edges: Edge[];
     };
     
+    const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
     let visNetwork: vis.Network;
     let edges: vis.DataSet<vis.Edge> = new vis.DataSet([]);
     let nodes: vis.DataSet<vis.Node> = new vis.DataSet([]);
@@ -87,7 +91,8 @@
             return {
                 from: edge.from,
                 to: edge.to,
-                color: { color: color}
+                color: { color: color},
+                id: edge.id
             };
         });
         return edgeDataSet;
@@ -98,6 +103,23 @@
         showNodeDetails = (event.nodes.length == 1);
         if (showNodeDetails) {
             lastNode = networkData.nodes.find(node => node.aet === event.nodes[0]) || {} as Node;
+        }
+        if (showEdgeDetails) {
+            lastEdge = networkData.edges.find(edge => edge.id === event.edges[0]) || {} as Edge;
+        }
+    }
+
+    function handleDragEnd(event: { nodes: string[], pointer: { cavas: { x: number, y: number } } }) {
+        if (event.nodes.length == 1) {
+            const movedNode = networkData.nodes.find(node => node.aet === event.nodes[0]) || {} as Node;
+            movedNode.visX = event.pointer.canvas.x;
+            movedNode.visY = event.pointer.canvas.y;
+            axios.post(`http://${ipManager}:3002/update_node`, movedNode)
+            .then(response => {
+                network.updateNetwork();
+            }).catch(error => {
+                alert(error);
+            });
         }
     }
 
@@ -148,7 +170,7 @@
         if (container) {
             visNetwork = new vis.Network(container, data, options);
             visNetwork.on('click', handleClick);
-            visNetwork.on('click', handleClick);
+            visNetwork.on('dragEnd', handleDragEnd);
         } else {
             console.error('Container element not found');
         }
@@ -162,7 +184,10 @@
 </script>
 
 <Details bind:showDetails={showEdgeDetails}>
-    <h2>Edge details</h2>  
+    <h2>Edge details</h2>
+    <h2>From: {lastEdge.from} </h2>
+    <h2>To: {lastEdge.to} </h2> 
+
 </Details>
 
 <Details bind:showDetails={showNodeDetails}>

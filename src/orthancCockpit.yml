@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+
+  network-db:
+    image: neo4j:2025.02.0-bullseye
+    ports: 
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/${ADMIN_PASSWORD}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks: [ "dicom-net" ]
+
+
+
+  network-manager:
+    image: network-service:latest
+    ports:
+      - "3002:80"
+    environment:
+      - PUBLIC_IP_DB=${PUBLIC_IP_MANAGER}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints: [node.role == manager]
+    networks: [ "dicom-net" ]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - network-db
+
+  front-end:
+    image: front-end:latest
+    ports: 
+      - "3000:3000"
+    environment:
+      - PUBLIC_IP_MANAGER=${PUBLIC_IP_MANAGER}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks: [ "dicom-net" ]
+    depends_on:
+      - network-manager
+
+networks:
+  dicom-net:
+    driver: bridge
+    external: true

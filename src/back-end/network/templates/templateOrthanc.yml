@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+
+  service_name:
+    image: jodogne/orthanc-plugins:1.12.6
+    command: /run/secrets/
+    
+    ports:
+      - "portWeb:portWeb"     # Web interface (different port)
+      - "portDICOM:portDICOM"     # DICOM port (different port)
+    secrets:
+      - configTmp.json
+    environment:
+      ADMIN_PASSWORD: ${PASSWORD_DB}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - "node.hostname == hostname"
+    networks:
+      - dicom-net
+
+networks:
+  dicom-net:
+    driver: bridge
+    external: true
+secrets:
+  configTmp.json:
+    file: configTmp.json
