@@ -1,11 +1,6 @@
 const express = require('express');
-const neo4j = require('neo4j-driver');
 const log = require('debug')('product-d');
-const axios = require('axios');
-const { spawn } = require('child_process');
 const { Neo4jDriver } = require('./utils/crud-wp');
-
-
 
 const app = express.Router();
 const DB_IP = process.env.PUBLIC_IP_DB || 'localhost';
@@ -13,14 +8,14 @@ const PASSWORD = process.env.ADMIN_PASSWORD || 'password';
 
 const neo4jDriver = new Neo4jDriver(DB_IP, PASSWORD);
 neo4jDriver.connect();
-neo4jDriver.addInitialSwarmNode();
+neo4jDriver.addInitialSwarmNodes();
 neo4jDriver.updateSwarmNodes();
+neo4jDriver.updateServerStatus();
 
 app.get('/reset', (req, res) => {
   return neo4jDriver.driver.executeQuery(
     'MATCH (p) DETACH DELETE p',
   ).then((result) => {
-    log("Result of request");
     return res.status(200).json({
       status: 'ok'
     });
@@ -34,7 +29,6 @@ app.get('/reset', (req, res) => {
 
 app.post('/add_Orthanc_server', (req, res) => {
   return neo4jDriver.addOrthancServer(req.body).then(() => {
-    log("Result of request");
     return res.status(200).json({
       status: 'ok'
     });
@@ -49,28 +43,16 @@ app.post('/add_Orthanc_server', (req, res) => {
 });
 
 app.post('/add_edge', (req, res) => {
-  return neo4jDriver.driver.executeQuery(
-    'MATCH (n1 {aet: $from}) ' +
-    'MATCH (n2 {aet: $to})' +
-    'MERGE (n1)-[r:CONNECTED_TO]->(n2)' +
-    'SET r.status = $status ' +
-    'RETURN n1,n2',
-    {
-      from: req.body.from,
-      to: req.body.to,
-      status: req.body.status
-    },
-  ).then((result) => {
-    log("Result of request");
-    log(result.records[0].get('n1').properties.aet);
-    log(result.records[0].get('n2').properties.aet);
+  return neo4jDriver.addEdge(req.body).then(() => {
     return res.status(200).json({
       status: 'ok'
     });
   }).catch((err) => {
-    log("Error");
+    log("Error when adding edge: ", err);
     return res.status(500).json({
-      status: err
+      status: 'error',
+      message: 'Failed to add edge',
+      error: err.message
     });
   });
 });
@@ -85,7 +67,7 @@ app.get('/network', (req, res) => {
     network.nodes = resultNode.records.map(record => record.get('n').properties);
 
     neo4jDriver.driver.executeQuery(
-      'MATCH (n)-[r]->(m) ' +
+      'MATCH (n)-[r:CONNECTED_TO]->(m) ' +
       'WHERE n.aet IS NOT NULL AND m.aet IS NOT NULL ' +
       'RETURN n,m,r',
     ).then((resultEdge) => {
@@ -149,5 +131,20 @@ app.get('/test', (req, res) => {
     status: 'ok'
   });
 });
+
+app.post('/delete_node', (req, res) => {
+  return neo4jDriver.deleteServer(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when adding edge: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to add edge',
+      error: err.message
+    });
+  });
+})
 
 module.exports = app;

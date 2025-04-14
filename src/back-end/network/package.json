@@ -13,7 +13,8 @@
     "moment": "2.15.2",
     "morgan": "1.8.1",
     "nano": "6.4.3",
-    "neo4j-driver": "^5.28.1"
+    "neo4j-driver": "^5.28.1",
+    "node-docker-api": "^1.1.22"
   },
   "overrides": {
     "graceful-fs": "^4.2.10"

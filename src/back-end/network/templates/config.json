@@ -2,12 +2,13 @@
     "Name": "",
     "DicomAet": "",
     "DicomPort": 0,
-    "HttpPort": 0,
+    "HttpPort": 8042,
     "RemoteAccessAllowed": true,
     "HttpServerEnabled": true,
     "DicomAlwaysAllowEcho" : true,
+    "DicomAlwaysAllowStore" : true,
     "DicomTlsEnabled" : false,
     "RegisteredUsers" : {
-        "admin" : "${ADMIN_PASSWORD}"
+        "admin" : ""
     }
 }

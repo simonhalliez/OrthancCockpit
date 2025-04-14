@@ -123,6 +123,17 @@
         }
     }
 
+    function deleteServer() {
+        if (lastNode) {
+            axios.post(`http://${ipManager}:3002/delete_node`, lastNode)
+            .then(() => {
+                network.updateNetwork();
+            }).catch((error: unknown) => {
+                alert(error);
+            });
+        }
+    }
+
     onMount(() => {
         network.updateNetwork();
 
@@ -191,7 +202,11 @@
 </Details>
 
 <Details bind:showDetails={showNodeDetails}>
+    
     <h2>Node details {lastNode.aet}</h2>
+    <button class="btn" on:click={deleteServer}>Delete</button>
+    
+    
 </Details>
 
 <div class="container-fluid flex-grow-1 d-flex bg-light">

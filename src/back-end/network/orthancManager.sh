@@ -1,8 +1,14 @@
 #!/bin/bash
 
+set -e
+
+# Redirect errors to stderr and handle them globally
+trap 'exit 1' ERR
+
 case "$1" in
     
     "new_server")
+        
         # Put Argument in variable
         ORTHANC_NAME=$2
         ORTHANC_AET=$3
@@ -26,21 +32,20 @@ case "$1" in
         sed -i "s/configTmp.json/$ORTHANC_AET.json/" templates/currentOrthanc.yml
 
         # Adapt the JSON of configuration
-        jq --arg name "$ORTHANC_NAME" --arg aet "$ORTHANC_AET" --argjson web $PORT_WEB_IN --argjson dicom $PORT_DICOM_IN '.Name = $name | .DicomAet = $aet | .DicomPort = $dicom | .HttpPort = $web' templates/config.json > templates/$ORTHANC_AET.json
-
+        jq --arg name "$ORTHANC_NAME" --arg aet "$ORTHANC_AET" --argjson dicom $PORT_DICOM_OUT --arg adminPassword "$ADMIN_PASSWORD" '.Name = $name | .DicomAet = $aet | .DicomPort = $dicom | .RegisteredUsers.admin = $adminPassword' templates/config.json > templates/$ORTHANC_AET.json
 
         # Deploy the docker image
         docker stack deploy -d -c templates/currentOrthanc.yml orthancServers
 
         # Remove temporary files
         rm templates/currentOrthanc.yml
-
         ;;
     "remove_server")
         ORTHANC_NAME=$2
         docker service rm "orthancServers_${ORTHANC_NAME}"
         ;;
     *)
-        echo "Invalid command"
+        echo "Invalid command" >&2
+        exit 2
         ;;
 esac

@@ -23,13 +23,29 @@
 	const initialAddLinkValues = {
 		from: '',
 		to: '',
-		status: false
+		status: false,
+		allowEcho: true,
+		allowFind: false,
+		allowGet: false,
+		allowMove: false,
+		allowStore: false
+
 	};
 
 	let addServerValues = { ...initialAddServerValues };
 	let addLinkValues = { ...initialAddLinkValues };
 
 	function addServer() {
+		
+		// if (!addServerValues.orthancName || !addServerValues.aet || !addServerValues.hostNameSwarm || !addServerValues.portWeb || !addServerValues.portDicom) {
+		// 	alert("All fields are required.");
+		// 	return;
+		// }
+		// if (addServerValues.orthancName.length > 50 || addServerValues.aet.length > 50 || addServerValues.hostNameSwarm.length > 50) {
+		// 	alert("Fields cannot exceed 50 characters.");
+		// 	return;
+		// }
+
 		axios.post(`http://${ipManager}:3002/add_Orthanc_server`, addServerValues)
 			.then(response => {
 				network.updateNetwork();
@@ -65,26 +81,26 @@
 		<ButtonHeader text="Add a server" onClick={()=> showAddServer=true}/>
 		<CenteredWindow bind:showModal={showAddServer} header="Add an Orthanc server">
 			<div slot="form">
-				<form on:submit={addServer}>
+				<form on:submit|preventDefault={addServer}>
 					<div class="mb-3">
 						<label for="serverName" class="form-label fs-5">Orthanc server name:</label>
-						<input bind:value={addServerValues.orthancName} type="text" class="form-control rounded-3" id="serverName" placeholder="Ex: cardiology_server_1">
+						<input bind:value={addServerValues.orthancName} type="text" class="form-control rounded-3" id="serverName" placeholder="Ex: cardiology_server_1" maxlength="50" required>
 					</div>
 					<div class="mb-3">
 						<label for="aet" class="form-label fs-5">Application Entity Title (AET):</label>
-						<input bind:value={addServerValues.aet} type="text" class="form-control rounded-3" id="aet" placeholder="Ex: CARDIOLOGY_SERVER_1">
+						<input bind:value={addServerValues.aet} type="text" class="form-control rounded-3" id="aet" placeholder="Ex: CARDIOLOGY_1" maxlength="16" required>
 					</div>
 					<div class="mb-3">
 						<label for="hostName" class="form-label fs-5">Host name in swarm:</label>
-						<input bind:value={addServerValues.hostNameSwarm} type="text" class="form-control rounded-3" id="hostName" placeholder="Ex: OrthancPACS">
+						<input bind:value={addServerValues.hostNameSwarm} type="text" class="form-control rounded-3" id="hostName" placeholder="Ex: OrthancPACS" maxlength="50" required>
 					</div>
 					<div class="mb-3">
 						<label for="webPort" class="form-label fs-5">Port Web:</label>
-						<input bind:value={addServerValues.portWeb} type="text" class="form-control rounded-3" id="webPort" placeholder="Ex: 8083">
+						<input bind:value={addServerValues.portWeb} type="text" class="form-control rounded-3" id="webPort" placeholder="Ex: 8083" pattern="\d+" required>
 					</div>
 					<div class="mb-3">
 						<label for="DICOMPort" class="form-label fs-5">Port DICOM:</label>
-						<input bind:value={addServerValues.portDicom} type="text" class="form-control rounded-3" id="DICOMPort" placeholder="Ex: 4243">
+						<input bind:value={addServerValues.portDicom} type="text" class="form-control rounded-3" id="DICOMPort" placeholder="Ex: 4243" pattern="\d+" required>
 					</div>
 					<button class="w-100 mb-2 btn btn-lg rounded-3 btn-primary" style="background-color: #1c398e;" type="submit">Add a server</button>
 				</form>	
@@ -102,6 +118,36 @@
 					<div class="mb-3">
 						<label for="to" class="form-label fs-5">To:</label>
 						<input bind:value={addLinkValues.to} type="text" class="form-control rounded-3" id="to" placeholder="Ex: CARDIOLOGY_SERVER_2">
+					</div>
+					<div class="mb-3">
+						<input bind:checked={addLinkValues.allowEcho} class="form-check-input" type="checkbox" id="echo">
+						<label class="form-check-label fs-5" for="echo">
+							Allow echo
+						</label>
+					</div>
+					<div class="mb-3">
+						<input bind:checked={addLinkValues.allowFind} class="form-check-input" type="checkbox" id="find">
+						<label class="form-check-label fs-5" for="find">
+							Allow find
+						</label>
+					</div>
+					<div class="mb-3">
+						<input bind:checked={addLinkValues.allowGet} class="form-check-input" type="checkbox" id="get">
+						<label class="form-check-label fs-5" for="get">
+							Allow get
+						</label>
+					</div>
+					<div class="mb-3">
+						<input bind:checked={addLinkValues.allowMove} class="form-check-input" type="checkbox" id="move">
+						<label class="form-check-label fs-5" for="move">
+							Allow move
+						</label>
+					</div>
+					<div class="mb-3">
+						<input bind:checked={addLinkValues.allowStore} class="form-check-input" type="checkbox" id="store">
+						<label class="form-check-label fs-5" for="store">
+							Allow store
+						</label>
 					</div>
 					<button class="w-100 mb-2 btn btn-lg rounded-3 btn-primary" style="background-color: #1c398e;" type="submit">Add a link</button>
 				</form>

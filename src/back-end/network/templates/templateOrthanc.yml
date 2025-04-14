@@ -11,8 +11,6 @@ services:
       - "portDICOM:portDICOM"     # DICOM port (different port)
     secrets:
       - configTmp.json
-    environment:
-      ADMIN_PASSWORD: ${PASSWORD_DB}
     deploy:
       replicas: 1
       restart_policy:
