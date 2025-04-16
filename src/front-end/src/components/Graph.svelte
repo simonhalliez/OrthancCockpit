@@ -114,7 +114,7 @@
             const movedNode = networkData.nodes.find(node => node.aet === event.nodes[0]) || {} as Node;
             movedNode.visX = event.pointer.canvas.x;
             movedNode.visY = event.pointer.canvas.y;
-            axios.post(`http://${ipManager}:3002/update_node`, movedNode)
+            axios.post(`http://${ipManager}:3002/update_node_position`, movedNode)
             .then(response => {
                 network.updateNetwork();
             }).catch(error => {

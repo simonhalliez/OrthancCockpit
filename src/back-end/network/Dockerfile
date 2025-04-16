@@ -23,7 +23,7 @@ RUN apk add --no-cache docker-cli
 RUN apk update && apk add bash && apk add curl && apk add jq 
 
 # header for loggining messages
-ENV DEBUG product-d
+ENV DEBUG network-d
 
 # we now use an script to deploy the authentication service
 CMD npm start

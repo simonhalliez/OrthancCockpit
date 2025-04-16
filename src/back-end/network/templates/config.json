@@ -5,8 +5,8 @@
     "HttpPort": 8042,
     "RemoteAccessAllowed": true,
     "HttpServerEnabled": true,
-    "DicomAlwaysAllowEcho" : true,
-    "DicomAlwaysAllowStore" : true,
+    "DicomAlwaysAllowEcho" : false,
+    "DicomAlwaysAllowStore" : false,
     "DicomTlsEnabled" : false,
     "RegisteredUsers" : {
         "admin" : ""

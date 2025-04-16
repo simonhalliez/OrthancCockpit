@@ -47,26 +47,26 @@
 		// }
 
 		axios.post(`http://${ipManager}:3002/add_Orthanc_server`, addServerValues)
-			.then(response => {
+			.then( () => {
 				network.updateNetwork();
-				showAddServer = false;
-				addServerValues = { ...initialAddServerValues };
 			})
-			.catch(error => {
+			.catch((error: any) => {
 				alert(error);
 			});
-		
+		showAddServer = false;
+		addServerValues = { ...initialAddServerValues };
+	
 	}
 
 	function addLink() {
 		axios.post(`http://${ipManager}:3002/add_edge`, addLinkValues)
-			.then(response => {
+			.then( () => {
 				network.updateNetwork();
-				showAddLink = false;
-				addLinkValues = { ...initialAddLinkValues };
-			}) .catch(error => {
+			}) .catch((error: any) => {
 				alert(error);
 			});
+		showAddLink = false;
+		addLinkValues = { ...initialAddLinkValues };
 	}
 </script>
 
