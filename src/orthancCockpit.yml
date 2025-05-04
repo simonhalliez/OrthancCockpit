@@ -36,19 +36,19 @@ services:
     depends_on:
       - network-db
 
-  front-end:
-    image: front-end:latest
-    ports: 
-      - "3000:3000"
-    environment:
-      - PUBLIC_IP_MANAGER=${PUBLIC_IP_MANAGER}
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-    networks: [ "dicom-net" ]
-    depends_on:
-      - network-manager
+  # front-end:
+  #   image: front-end:latest
+  #   ports: 
+  #     - "3000:3000"
+  #   environment:
+  #     - PUBLIC_IP_MANAGER=${PUBLIC_IP_MANAGER}
+  #   deploy:
+  #     replicas: 1
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks: [ "dicom-net" ]
+  #   depends_on:
+  #     - network-manager
 
 networks:
   dicom-net:

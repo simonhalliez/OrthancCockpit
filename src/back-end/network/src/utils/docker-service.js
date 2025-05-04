@@ -7,13 +7,13 @@ class DockerService {
         return new Promise((resolve, reject) => {
             const dockerProcess = spawn(command, args);
             let output = '';
-        
+            let stderr = '';
             dockerProcess.stdout.on('data', (data) => {
                 output += data.toString();
             });
         
             dockerProcess.stderr.on('data', (data) => {
-                log(`Error in the output of the command: ${data.toString()}`);
+                stderr += data.toString();
             });
 
             dockerProcess.on('error', (error) => {
@@ -24,7 +24,7 @@ class DockerService {
                 if (code === 0) {
                     resolve(output);
                 } else {
-                    reject(new Error(`Docker command failed with code ${code}`));
+                    reject(new Error(stderr));
                 }
             });
         });

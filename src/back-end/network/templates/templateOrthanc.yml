@@ -10,7 +10,7 @@ services:
       - "portWeb:portWeb"     # Web interface (different port)
       - "portDICOM:portDICOM"     # DICOM port (different port)
     secrets:
-      - configTmp.json
+      - secret_name.json
     deploy:
       replicas: 1
       restart_policy:
@@ -20,11 +20,16 @@ services:
           - "node.hostname == hostname"
     networks:
       - dicom-net
+    volumes:
+      - volume_name:/var/lib/orthanc/db/
 
 networks:
   dicom-net:
     driver: bridge
     external: true
 secrets:
-  configTmp.json:
-    file: configTmp.json
+  secret_name.json:
+    file: secret_name.json
+volumes:
+  volume_name:
+    driver: local

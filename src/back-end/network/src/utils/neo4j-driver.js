@@ -22,13 +22,8 @@ class Neo4jDriver {
 
   async updateNodePosition(reqBody) {
     return await this.driver.executeQuery(
-      'MATCH (n {aet: $aet}) ' +
-      'SET n.orthancName = $orthancName, ' +
-      'n.hostNameSwarm = $hostNameSwarm, ' +
-      'n.portWeb = $portWeb, ' +
-      'n.portDicom = $portDicom, ' +
-      'n.status = $status, ' +
-      'n.visX = $visX, ' +
+      'MATCH (n {serviceId: $serviceId}) ' +
+      'SET n.visX = $visX, ' +
       'n.visY = $visY ' +
       'RETURN n',
       reqBody
@@ -37,11 +32,14 @@ class Neo4jDriver {
   async retrieveNetwork() {
     const network = { nodes: [], edges: [] };
     const resultNode = await this.driver.executeQuery(
-      'MATCH (n) ' +
+      'MATCH (n)-[r:RUNNING]->(s:SwarmNode) ' +
       'WHERE n.aet IS NOT NULL ' +
-      'RETURN n'
+      'RETURN n, s'
     )
-    network.nodes = resultNode.records.map(record => record.get('n').properties);
+    network.nodes = resultNode.records.map(record => ({
+      ...record.get('n').properties,
+      ip: record.get('s').properties.ip
+    }));
     const resultEdge = await this.driver.executeQuery(
       'MATCH (n)-[r:CONNECTED_TO]->(m) ' +
       'WHERE n.aet IS NOT NULL AND m.aet IS NOT NULL ' +
@@ -49,11 +47,12 @@ class Neo4jDriver {
     );
       
     network.edges = resultEdge.records.map(record => {
+      const edgeProperties = record.get('r').properties;
       return {
-        from: record.get('n').properties.aet,
-        to: record.get('m').properties.aet,
-        status: record.get('r').properties.status,
-        id: record.get('r').elementId
+      from: record.get('n').properties.aet,
+      to: record.get('m').properties.aet,
+      id: record.get('r').elementId,
+      ...edgeProperties
       };
     });
     return network;

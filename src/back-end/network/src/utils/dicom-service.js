@@ -8,7 +8,7 @@ class DicomService {
   }
 
   async addEdge(reqBody) {
-    log('Adding edge:', reqBody);
+    log(process.env.ADMIN_PASSWORD)
     let serverFrom = null;
     let serverTo = null;
     let session = this.neo4jDriver.driver.session();
@@ -28,7 +28,6 @@ class DicomService {
       if (serverFrom.records[0].get('n').properties.status === false) {
         throw new Error(`The orthanc server ${reqBody.from} is not running`);
       }
-      if (serverFrom.records)
       serverTo = await tx.run(
         'MATCH (n:OrthancServer {aet: $to})-[:RUNNING]->(h:SwarmNode)  RETURN n,h',
         reqBody
@@ -66,12 +65,11 @@ class DicomService {
     const serverToProperties = serverTo.records[0].get('n').properties;
     const nodeFromPoperties = serverFrom.records[0].get('h').properties;
     const nodeToPoperties = serverTo.records[0].get('h').properties;
-    log('Info :', serverFromProperties);
     // Add the peer to the server 'from'.
     try {
       const response = await axios.put(
-       `http://${nodeFromPoperties.ip}:${serverFromProperties.portWeb}/peers/${serverToProperties.orthancName}`,
-      { Url: `http://${nodeToPoperties.ip}:${serverToProperties.portWeb}` },
+       `http://${nodeFromPoperties.ip}:${serverFromProperties.publishedPortWeb}/peers/${serverToProperties.serviceId}`,
+      { Url: `http://${nodeToPoperties.ip}:${serverToProperties.publishedPortWeb}` },
       {
         auth: {
           username: 'admin',
@@ -81,7 +79,6 @@ class DicomService {
           'Content-Type': 'application/json'
         }
       });
-      log(`A peer to ${reqBody.from} added successfully: ${response.data}`);
     } catch (err) {
       log(`Error when adding a peer to ${reqBody.from}: ${err.message}`);
     }
@@ -89,8 +86,8 @@ class DicomService {
     // Add the peer to the server 'to'.
     try {
       const response = await axios.put(
-        `http://${nodeToPoperties.ip}:${serverToProperties.portWeb}/peers/${serverFromProperties.orthancName}`,
-        { Url: `http://${nodeFromPoperties.ip}:${serverFromProperties.portWeb}` },
+        `http://${nodeToPoperties.ip}:${serverToProperties.publishedPortWeb}/peers/${serverFromProperties.serviceId}`,
+        { Url: `http://${nodeFromPoperties.ip}:${serverFromProperties.publishedPortWeb}` },
         {
           auth: {
             username: 'admin',
@@ -101,7 +98,7 @@ class DicomService {
           }
         }
       );
-      log(`Edge added successfully: ${response.data}`);
+
     } catch (err) {
       log(`Error when adding a peer to ${reqBody.to}: ${err.message}`);
     }
@@ -109,19 +106,19 @@ class DicomService {
     // Add the modality to the server 'to'.
     try {
       const response = await axios.put(
-        `http://${nodeToPoperties.ip}:${serverToProperties.portWeb}/modalities/${serverFromProperties.aet}`,
+        `http://${nodeToPoperties.ip}:${serverToProperties.publishedPortWeb}/modalities/${serverFromProperties.serviceId}`,
         {
           AET: serverFromProperties.aet,
           AllowEcho: reqBody.allowEcho,
           AllowFind: reqBody.allowFind,
-          AllowFindWorklist: reqBody.allowFind,
+          AllowFindWorklist: false,
           AllowGet: reqBody.allowGet,
           AllowMove: reqBody.allowMove,
-          AllowStorageCommitment: reqBody.allowStore,
+          AllowStorageCommitment: false,
           AllowStore: reqBody.allowStore,
           AllowTranscoding: false,
           Host: nodeFromPoperties.ip,
-          Port: serverFromProperties.portDicom,
+          Port: serverFromProperties.publishedPortDicom,
           Timeout: 0,
           UseDicomTls: false
         },
@@ -134,7 +131,6 @@ class DicomService {
             'Content-Type': 'application/json'
           }
       });
-      log(`Edge added successfully: ${response.data}`);
     } catch (err) {
       log(`Error when adding a modality to ${reqBody.to}: ${err.message}`);
     }
@@ -142,8 +138,8 @@ class DicomService {
     // Add the modality to the server from if the modality is not already present.
     if (isReverseMissing) {
       try {
-        const response = axios.put(
-          `http://${nodeFromPoperties.ip}:${serverFromProperties.portWeb}/modalities/${serverToProperties.aet}`,
+        const response = await axios.put(
+          `http://${nodeFromPoperties.ip}:${serverFromProperties.publishedPortWeb}/modalities/${serverToProperties.serviceId}`,
           {
             AET: serverToProperties.aet,
             AllowEcho: false,
@@ -155,7 +151,7 @@ class DicomService {
             AllowStore: false,
             AllowTranscoding: false,
             Host: nodeToPoperties.ip,
-            Port: serverToProperties.portDicom,
+            Port: serverToProperties.publishedPortDicom,
             Timeout: 0,
             UseDicomTls: false
           },
@@ -168,7 +164,6 @@ class DicomService {
               'Content-Type': 'application/json'
             }
         });
-        log(`Modality add to from server: ${response.data}`);
       } catch (err) {
         log(`Error when adding a modality to ${reqBody.from}: ${err.message}`);
       }
@@ -179,18 +174,17 @@ class DicomService {
   async testDicomConnections() {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
-      const relationResult = await tx.run(
-        'MATCH (n_from)-[c:CONNECTED_TO]->(n_to) ' +
-        'MATCH (n_from)-[r1:RUNNING]->(h_from) ' + 
-        'MATCH (n_to)-[r2:RUNNING]->(h_to) ' +
-        'WHERE n_from.status = true AND n_to.status = true ' +
-        'RETURN n_from,n_to,h_from,h_to',
+      const relationResult = await tx.run(`
+        MATCH (n_from)-[c:CONNECTED_TO]->(n_to) 
+        MATCH (n_from)-[r1:RUNNING]->(h_from) 
+        RETURN n_from,n_to,h_from
+        `,
       );
       for (const relation of relationResult.records) {
         try {
           // Perform the DICOM echo request
           await axios.post(
-            `http://${relation.get('h_from').properties.ip}:${relation.get('n_from').properties.portWeb}/modalities/${relation.get('n_to').properties.aet}/echo`,
+            `http://${relation.get('h_from').properties.ip}:${relation.get('n_from').properties.publishedPortWeb}/modalities/${relation.get('n_to').properties.serviceId}/echo`,
             { "CheckFind": false, "Timeout": 0 },
             {
               auth: {
@@ -229,6 +223,57 @@ class DicomService {
         }
       }
     })
+  }
+
+  async deleteLink(reqBody) {
+    let session = this.neo4jDriver.driver.session();
+    await session.executeWrite( async (tx) => {
+      const modalities = await tx.run(`
+        MATCH (m_from)-[r:CONNECTED_TO]->(m_to) 
+        WHERE elementId(r) = $id 
+        RETURN m_from, m_to
+        `,
+        reqBody
+      );
+      if (modalities.records.length === 0) {
+        throw new Error(`No link found in the database between ${reqBody.from} and ${reqBody.to}`);
+      }
+      // Check if the 'to' server is an Orthanc server.
+      if (modalities.records[0].get('m_to').labels.includes("OrthancServer")) {
+        // Get the host IP address of "to" server from the database.
+        const host = await tx.run(`
+          MATCH (m_to:OrthancServer {serviceId: $serviceId})-[:RUNNING]->(h_to:SwarmNode) 
+          RETURN h_to
+          `,
+          modalities.records[0].get('m_to').properties
+        );
+        if (host.records.length === 0) {
+          throw new Error(`No host found in the database for ${reqBody.to}`);
+        }
+        const hostIp = host.records[0].get('h_to').properties.ip;
+        const publishedPortWeb = modalities.records[0].get('m_to').properties.publishedPortWeb;
+        // Perform the delete request to the Orthanc server.
+        try {
+          await axios.delete(`http://${hostIp}:${publishedPortWeb}/modalities/${modalities.records[0].get('m_from').properties.serviceId}`, {
+            auth: {
+              username: 'admin',
+              password: process.env.ADMIN_PASSWORD
+            }
+          });
+        } catch (error) {
+          throw new Error(`Request ( http://${hostIp}:${publishedPortWeb}/modalities/${modalities.records[0].get('m_from').properties.serviceId}  password ${process.env.ADMIN_PASSWORD}) to delete the modality to ${reqBody.to} failed: ${error.message}`);
+        }
+      }
+      // Delete the link in the database.
+      await tx.run(`
+        MATCH (m_from)-[r:CONNECTED_TO]->(m_to) 
+        WHERE elementId(r) = $id 
+        DELETE r
+        `,
+        reqBody
+      );
+    });
+    await session.close();
   }
 }
 

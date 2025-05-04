@@ -85,7 +85,7 @@ app.post('/update_node_position', (req, res) => {
   });
 });
 
-app.get('/test', async (req, res) => {
+app.get('/update_status', async (req, res) => {
   await orthancService.updateServerStatus();
   return dicomService.testDicomConnections()
   .then(() => {
@@ -94,9 +94,11 @@ app.get('/test', async (req, res) => {
     });
   })
   .catch((err) => {
-    log("Error: ", err);
+    log("Error when updating status: ", err);
     return res.status(500).json({
-      status: err
+      status: 'error',
+      message: 'Failed to update status',
+      error: err.message
     });
   });
 });
@@ -107,10 +109,40 @@ app.post('/delete_node', (req, res) => {
       status: 'ok'
     });
   }).catch((err) => {
-    log("Error when adding edge: ", err);
+    log("Error when deleting a server: ", err);
     return res.status(500).json({
       status: 'error',
-      message: 'Failed to add edge',
+      message: 'Failed to delete a server',
+      error: err.message
+    });
+  });
+})
+
+app.post('/delete_edge', (req, res) => {
+  return dicomService.deleteLink(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when deleting an edge: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete the edge',
+      error: err.message
+    });
+  });
+})
+
+app.post('/edit_server', (req, res) => {
+  return orthancService.editServer(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when editing the server: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to edit the server',
       error: err.message
     });
   });
