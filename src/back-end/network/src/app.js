@@ -1,10 +1,10 @@
 const express = require('express');
 const log = require('debug')('product-d');
-const { Brole } = require('./utils/crud-wp');
 const { Neo4jDriver } = require('./utils/neo4j-driver');
 const { SwarmService } = require('./utils/swarm-service');
 const { OrthancService } = require('./utils/orthanc-service');
 const { DicomService } = require('./utils/dicom-service');
+const { ModalityService } = require('./utils/modality-service');
 
 const app = express.Router();
 const DB_IP = process.env.PUBLIC_IP_DB || 'localhost';
@@ -12,9 +12,9 @@ const PASSWORD = process.env.ADMIN_PASSWORD || 'password';
 
 const neo4jDriver = new Neo4jDriver(DB_IP, PASSWORD);
 neo4jDriver.connect();
-const broleService = new Brole(neo4jDriver);
 const swarmService = new SwarmService(neo4jDriver);
 const orthancService = new OrthancService(neo4jDriver);
+const modalityService = new ModalityService(neo4jDriver);
 const dicomService = new DicomService(neo4jDriver);
 swarmService.addInitialSwarmNodes();
 swarmService.updateSwarmNodes();
@@ -33,6 +33,22 @@ app.post('/add_Orthanc_server', (req, res) => {
     });
   });
 });
+
+app.post('/add_modality',async (req, res) => {
+  await orthancService.updateServerStatus();
+  return modalityService.addModality(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when adding modality: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to add modality',
+      error: err.message
+    });
+  });
+})
 
 app.post('/add_edge', async (req, res) => {
   await orthancService.updateServerStatus();
@@ -143,6 +159,21 @@ app.post('/edit_server', (req, res) => {
     return res.status(500).json({
       status: 'error',
       message: 'Failed to edit the server',
+      error: err.message
+    });
+  });
+})
+
+app.post('/edit_modality', (req, res) => {
+  return modalityService.editModality(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when editing the modality: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to edit the modality',
       error: err.message
     });
   });

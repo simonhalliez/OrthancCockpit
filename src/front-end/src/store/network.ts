@@ -1,11 +1,12 @@
 import { writable } from "svelte/store";
+import type { Writable } from "svelte/store";
 import axios from "axios";
 import { env } from "$env/dynamic/public";
 
 const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
 
 function createNetwork() {
-    const { subscribe, set, update} = writable({nodes: [],edges: []})
+    const { subscribe, set, update}: Writable<Network> = writable<Network>({nodes: {orthancServers: [], dicomModalities:[]},edges: []})
 
     return {
         subscribe,

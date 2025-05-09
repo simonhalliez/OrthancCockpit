@@ -21,42 +21,80 @@ class Neo4jDriver {
   }
 
   async updateNodePosition(reqBody) {
-    return await this.driver.executeQuery(
-      'MATCH (n {serviceId: $serviceId}) ' +
-      'SET n.visX = $visX, ' +
-      'n.visY = $visY ' +
-      'RETURN n',
+    return await this.driver.executeQuery(`
+      MATCH (n {uuid: $uuid}) 
+      SET n.visX = $visX, 
+      n.visY = $visY`,
       reqBody
     )}
 
   async retrieveNetwork() {
-    const network = { nodes: [], edges: [] };
-    const resultNode = await this.driver.executeQuery(
-      'MATCH (n)-[r:RUNNING]->(s:SwarmNode) ' +
-      'WHERE n.aet IS NOT NULL ' +
-      'RETURN n, s'
-    )
-    network.nodes = resultNode.records.map(record => ({
-      ...record.get('n').properties,
-      ip: record.get('s').properties.ip
-    }));
-    const resultEdge = await this.driver.executeQuery(
-      'MATCH (n)-[r:CONNECTED_TO]->(m) ' +
-      'WHERE n.aet IS NOT NULL AND m.aet IS NOT NULL ' +
-      'RETURN n,m,r',
-    );
-      
-    network.edges = resultEdge.records.map(record => {
-      const edgeProperties = record.get('r').properties;
-      return {
-      from: record.get('n').properties.aet,
-      to: record.get('m').properties.aet,
-      id: record.get('r').elementId,
-      ...edgeProperties
-      };
+    const network = { nodes: {orthancServer: [], dicomModalities: []}, edges: [] };
+    let session = this.driver.session();
+    await session.executeRead( async (tx) => {
+      const resultOrthancServer = await tx.run(
+        'MATCH (n: OrthancServer)-[r:RUNNING]->(s:SwarmNode) ' +
+        'RETURN n, s'
+      )
+      network.nodes.orthancServers = resultOrthancServer.records.map(record => ({
+        ...record.get('n').properties,
+        ip: record.get('s').properties.ip,
+        uuid: record.get('n').properties.uuid,
+      }));
+
+      const resultModalities = await tx.run(
+        'MATCH (m: Modality) ' +
+        'RETURN m'
+      )
+      network.nodes.dicomModalities = resultModalities.records.map(record => ({
+        ...record.get('m').properties,
+        uuid: record.get('m').properties.uuid,
+      }));
+      const resultEdge = await tx.run(
+        'MATCH (n)-[r:CONNECTED_TO]->(m) ' +
+        'WHERE n.aet IS NOT NULL AND m.aet IS NOT NULL ' +
+        'RETURN n,m,r',
+      );
+        
+      network.edges = resultEdge.records.map(record => {
+        const edgeProperties = record.get('r').properties;
+        return {
+        from: record.get('n').properties.aet,
+        to: record.get('m').properties.aet,
+        uuidFrom: record.get('n').properties.uuid,
+        uuidTo: record.get('m').properties.uuid,
+        id: record.get('r').elementId,
+        ...edgeProperties
+        };
+      });
+
+
     });
+    await session.close();
     return network;
-  };
+  }
+
+
+  static async recoverOrthancServerIp(serviceId, tx) {
+    let hostResult = await tx.run(`
+      MATCH (:OrthancServer {serviceId: $serviceId})-[:RUNNING]->(host:SwarmNode) 
+      RETURN host
+      `,
+      {serviceId}
+    );
+    if (hostResult.records.length === 0) {
+      throw new Error(`No host found in the database for ${serverId}`);
+    }
+    return hostResult.records[0].get('host').properties.ip;
+  }
+
+  static async recoverNodeIp(nodeElement, tx) {
+    if (nodeElement.labels.includes("OrthancServer")) {
+      return await this.recoverOrthancServerIp(nodeElement.properties.serviceId, tx);
+    } else {
+      return nodeElement.properties.ip;
+    }
+  }
 
 }
 

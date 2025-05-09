@@ -9,8 +9,8 @@
     let centeredWindowHeader = "Add a DICOM link";
     let submitText = "Add a server";
     if (editMode) {
-        centeredWindowHeader = "Edit Orthanc server";
-        submitText = "Apply changes to the server";
+        centeredWindowHeader = "Edit Orthanc link";
+        submitText = "Apply changes to the link";
     }
 </script>
 

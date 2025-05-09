@@ -7,14 +7,17 @@
 	import { env } from "$env/dynamic/public";
     import ServerFromWindow from '../components/ServerFormWindow.svelte';
 	import EdgesFormWindow from '../components/EdgesFormWindow.svelte';
+	import ModalityFormWindow from '../components/ModalityFormWindow.svelte';
 
 	const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
 	let showAddServer = false;
 	let showAddLink = false;
+	let showAddModality = false;
 
 	const initialAddServerValues:OrthancServer = {
 		orthancName: '',
 		aet: '',
+		ip: '',
 		hostNameSwarm: '',
 		publishedPortDicom: '',
 		publishedPortWeb: '',
@@ -38,8 +41,20 @@
 
 	};
 
+	const initialModalityValues:DICOMModality = {
+		aet: '',
+		ip: '',
+		publishedPortDicom: '',
+		outputPortDicom: '',
+		description: '',
+		status: false,
+		visX: 0.0,
+    	visY: 0.0
+	};
+
 	let addServerValues:OrthancServer = { ...initialAddServerValues };
 	let addLinkValues:Edge = { ...initialAddLinkValues };
+	let addModalityValues:DICOMModality = { ...initialModalityValues };
 
 	function addServer() {
 
@@ -66,6 +81,18 @@
 		addLinkValues = { ...initialAddLinkValues };
 	}
 
+	function addModality() {
+		axios.post(`http://${ipManager}:3002/add_modality`, addModalityValues)
+			.then( () => {
+				network.updateNetwork();
+			})
+			.catch((error: any) => {
+				alert(error);
+			});
+		showAddModality = false;
+		addModalityValues = { ...initialModalityValues };
+	}
+
 	function clickLogo() {
 		axios.get(`http://${ipManager}:3002/update_status`)
 			.then(() => {
@@ -85,10 +112,10 @@
 		<button type="button" on:click={clickLogo} style="cursor: pointer; background: none; border: none; padding: 0;">
 			<img src="/OrthancLogo.png" alt="logo" class="w-1/3 h-auto">
 		</button>
+		<ButtonHeader text="Add a modality" onClick={()=> showAddModality=true}/>
+		<ModalityFormWindow bind:showServerForm={showAddModality} bind:modalityValue={addModalityValues} submit={addModality} editMode={false}/>
 		<ButtonHeader text="Add a server" onClick={()=> showAddServer=true}/>
-		
 		<ServerFromWindow bind:showServerForm={showAddServer} bind:serverValues={addServerValues} submit={addServer} editMode={false}/>
-		
 		<ButtonHeader text="Add link" onClick={()=> showAddLink=true}/>
 		<EdgesFormWindow bind:showEdgeForm={showAddLink} bind:edgeValues={addLinkValues} submit={addLink} editMode={false}/>
 		<ButtonHeader text="Log out" onClick={()=>goto('/login')}/>

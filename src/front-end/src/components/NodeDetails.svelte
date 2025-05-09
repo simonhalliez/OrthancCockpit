@@ -1,0 +1,125 @@
+<script lang="ts">
+    import ButtonDetails from "./ButtonDetails.svelte";
+    import Details from "./Details.svelte";
+    import ModalityFormWindow from "./ModalityFormWindow.svelte";
+    import ServerFromWindow from "./ServerFormWindow.svelte";
+    import axios from "axios";
+    import { network } from '../store/network';
+    import { env } from "$env/dynamic/public";
+
+    export let node: DicomNode;
+    export let showNodeDetails: boolean = false;
+
+    const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+    let showServerEdit = false;
+    let showModalityEdit = false;
+
+    function editServer() {
+        if (node) {
+            axios.post(`http://${ipManager}:3002/edit_server`, node)
+			.then( () => {
+				network.updateNetwork();
+			}) .catch((error: any) => {
+				alert(error);
+			});
+            showServerEdit = false;
+        }
+    }
+
+    function editModality() {
+        if (node) {
+            axios.post(`http://${ipManager}:3002/edit_modality`, node)
+            .then( () => {
+                network.updateNetwork();
+            }) .catch((error: any) => {
+                alert(error);
+            });
+            showModalityEdit = false;
+        }
+    }
+
+    function deleteNode() {
+        if (node) {
+            axios.post(`http://${ipManager}:3002/delete_node`, node)
+            .then(() => {
+                network.updateNetwork();
+            }).catch((error: unknown) => {
+                alert(error);
+            });
+            showNodeDetails = false;
+        }
+    }
+    
+</script>
+
+
+<Details bind:showDetails={showNodeDetails}>
+    <div class="d-flex fs-3 gap-4">
+        {#if node.status}
+            <i class="bi bi-circle-fill text-success text-left"></i>
+        {:else}
+            <i class="bi bi-circle-fill text-danger text-left"></i>
+        {/if}
+        <p class="text-center text-decoration-underline fw-bold">Node details</p>
+    </div>
+    <div class="fs-4">
+        {#if 'orthancName' in node}
+            <p class="fw-bold">Orthanc name:</p>
+            <p>{node.orthancName}</p>
+        {/if}
+        <div class="d-flex gap-2">
+            <p class="fw-bold">AET:</p>
+            <p>{node.aet}</p>
+        </div>
+        {#if 'orthancName' in node}
+            <p class="fw-bold">Swarm node:</p>
+            <p>{node.hostNameSwarm}</p>
+        {/if}
+        <div class="d-flex gap-2">
+            <p class="fw-bold">IP:</p>
+            <p>{node.ip}</p>
+        </div>
+        {#if 'orthancName' in node}
+            <div class="d-flex gap-2">
+                <p class="fw-bold">Port HTTP:</p>
+                <p>{node.publishedPortWeb}:{node.targetPortWeb}</p>
+            </div>
+            <div class="d-flex gap-2">
+                <p class="fw-bold">Port DICOM:</p>
+                <p>{node.publishedPortDicom}:{node.targetPortDicom}</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href={`http://${node.ip}:${node.publishedPortWeb}`} target="_blank">
+                    <p class="fw-bold">Link to server</p>
+                </a>
+            </div>
+        {:else}
+            <p class="fw-bold">Ports DICOM:</p>
+            <div class="d-flex">
+                <p class="w-50">In: {node.publishedPortDicom}</p>
+                <p class="w-50">Out: {node.outputPortDicom}</p>
+            </div>
+            
+            <p class="fw-bold">Description:</p>
+            <div class="description-box  overflow-auto mb-3" style="max-height: 200px;">
+                <p class="fs-5" style="white-space: pre-wrap;">{node.description}</p>
+            </div>
+        {/if}
+        
+        
+        
+    </div>
+    <div class="d-flex justify-content-around">
+        <ButtonDetails text="Delete" onClick={deleteNode}/>
+        {#if 'orthancName' in node}
+            <ButtonDetails text="Edit it" onClick={() => {showServerEdit=true}}/>
+            <ServerFromWindow bind:showServerForm={showServerEdit} bind:serverValues={node} submit={editServer} editMode={true}/>
+        {:else}
+            <ButtonDetails text="Edit it" onClick={() => {showModalityEdit=true}}/>
+            <ModalityFormWindow bind:showServerForm={showModalityEdit} bind:modalityValue={node} submit={editModality} editMode={true}/>
+        {/if}
+        
+    </div>
+        
+    
+</Details>

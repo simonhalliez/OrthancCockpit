@@ -1,10 +1,83 @@
 const log = require('debug')('network-d');
 const axios = require('axios');
-const { DockerService } = require('./docker-service');
+const { Neo4jDriver } = require('./neo4j-driver');
 
 class DicomService {
   constructor(neo4jDriver) {
     this.neo4jDriver = neo4jDriver;
+  }
+
+  static async putModalityToOrthancServer(serverIp, serverPublishedPortWeb, modalityId, payload) {
+    try {
+      const response = await axios.put(
+        `http://${serverIp}:${serverPublishedPortWeb}/modalities/${modalityId}`,
+        payload,
+        {
+          auth: {
+            username: 'admin',
+            password: process.env.ADMIN_PASSWORD
+          },
+          headers: {
+            'Content-Type': 'application/json'
+          }
+      });
+    } catch (err) {
+      throw new Error(`Adding a modality to host http://${serverIp}:${serverPublishedPortWeb}/modalities/${modalityId} : ${err.message}`);
+    }
+  }
+
+  static async updateConnectedOrthancServer(nodeProperties, hostToIp, tx) {
+    // Update the 'from' Orthanc servers that are connected to the modified Orthanc server.
+    let connectedOrthancServers = await tx.run(`
+      MATCH (node {uuid: $uuid}) 
+      MATCH (node)-[:CONNECTED_TO]-(server:OrthancServer) 
+      MATCH (server)-[:RUNNING]->(host:SwarmNode) 
+      RETURN server, host`,
+      nodeProperties
+    );
+
+    for (const connectedOrthancServer of connectedOrthancServers.records) {
+      const serverFromProperties = connectedOrthancServer.get('server').properties;
+      const hostFromProperties = connectedOrthancServer.get('host').properties;
+      await DicomService.putModalityToOrthancServer(
+        hostFromProperties.ip,
+        serverFromProperties.publishedPortWeb,
+        nodeProperties.uuid,
+        {
+          AET: nodeProperties.aet,
+          Host: hostToIp,
+          Port: nodeProperties.publishedPortDicom,
+        }
+
+      )
+    }
+  }
+
+  static async deleteConnectedOrthancServer(nodeProperties, tx) {
+    // Update the 'from' Orthanc servers that are connected to the modified Orthanc server.
+    let connectedOrthancServers = await tx.run(`
+      MATCH (node {uuid: $uuid}) 
+      MATCH (node)-[:CONNECTED_TO]-(server:OrthancServer) 
+      MATCH (server)-[:RUNNING]->(host:SwarmNode) 
+      RETURN server, host`,
+      nodeProperties
+    );
+    log(connectedOrthancServers.records.length)
+    for (const connectedOrthancServer of connectedOrthancServers.records) {
+      const serverFromProperties = connectedOrthancServer.get('server').properties;
+      const hostFromProperties = connectedOrthancServer.get('host').properties;
+      try {
+        await axios.delete(`http://${hostFromProperties.ip}:${serverFromProperties.publishedPortWeb}/modalities/${nodeProperties.uuid}`, 
+        {
+          auth: {
+            username: 'admin',
+            password: process.env.ADMIN_PASSWORD
+          }
+        });
+      } catch (error) {
+        throw new Error(`Request to delete the modality http://${hostFromProperties.ip}:${serverFromProperties.publishedPortDicom}/modalities/${nodeProperties.uuid} failed: ${error.message}`);
+      }
+    }
   }
 
   async addEdge(reqBody) {
@@ -17,27 +90,33 @@ class DicomService {
     await session.executeWrite( async (tx) => {
 
       // Check if the 'from' server exists in the database.
-      serverFrom = await tx.run(
-        'MATCH (n:OrthancServer {aet: $from})-[:RUNNING]->(h:SwarmNode)  RETURN n,h',
+      serverFrom = await tx.run(`
+        MATCH (n {aet: $from}) 
+        OPTIONAL MATCH (n)-[:RUNNING]->(h:SwarmNode) 
+        RETURN n,h
+        `,
         reqBody
       );
       if (serverFrom.records.length === 0) {
-        throw new Error(`No orthanc server found with AET ${reqBody.from}`);
+        throw new Error(`No entity found with AET ${reqBody.from}`);
       }
       // Check the status of the 'from' server.
-      if (serverFrom.records[0].get('n').properties.status === false) {
+      if (serverFrom.records[0].get('n').properties.status === false && serverFrom.records[0].get('n').labels.includes("OrthancServer")) {
         throw new Error(`The orthanc server ${reqBody.from} is not running`);
       }
-      serverTo = await tx.run(
-        'MATCH (n:OrthancServer {aet: $to})-[:RUNNING]->(h:SwarmNode)  RETURN n,h',
+      serverTo = await tx.run(`
+        MATCH (n {aet: $to}) 
+        OPTIONAL MATCH (n)-[:RUNNING]->(h:SwarmNode) 
+        RETURN n,h
+        `,
         reqBody
       );
       // Check if the 'to' server exists in the database.
       if (serverTo.records.length === 0) {
-        throw new Error(`No orthanc server found with AET ${reqBody.to}`);
+        throw new Error(`No entity found with AET ${reqBody.to}`);
       }
       // Check the status of the 'to' server.
-      if (serverTo.records[0].get('n').properties.status === false) {
+      if (serverTo.records[0].get('n').properties.status === false && serverTo.records[0].get('n').labels.includes("OrthancServer")) {
         throw new Error(`The orthanc server ${reqBody.to} is not running`);
       }
       await tx.run(
@@ -60,113 +139,61 @@ class DicomService {
       isReverseMissing = (res.records.length === 0)
     });
     await session.close();
-    
-    const serverFromProperties = serverFrom.records[0].get('n').properties;
-    const serverToProperties = serverTo.records[0].get('n').properties;
-    const nodeFromPoperties = serverFrom.records[0].get('h').properties;
-    const nodeToPoperties = serverTo.records[0].get('h').properties;
-    // Add the peer to the server 'from'.
-    try {
-      const response = await axios.put(
-       `http://${nodeFromPoperties.ip}:${serverFromProperties.publishedPortWeb}/peers/${serverToProperties.serviceId}`,
-      { Url: `http://${nodeToPoperties.ip}:${serverToProperties.publishedPortWeb}` },
-      {
-        auth: {
-          username: 'admin',
-          password: process.env.ADMIN_PASSWORD
-        },
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    } catch (err) {
-      log(`Error when adding a peer to ${reqBody.from}: ${err.message}`);
+
+    // Recover the IP address of the 'from' server.
+    let ipFrom;
+    if (serverFrom.records[0].get('n').labels.includes("OrthancServer")) {
+      ipFrom = serverFrom.records[0].get('h').properties.ip
+    } else {
+      ipFrom = serverFrom.records[0].get('n').properties.ip
     }
 
-    // Add the peer to the server 'to'.
-    try {
-      const response = await axios.put(
-        `http://${nodeToPoperties.ip}:${serverToProperties.publishedPortWeb}/peers/${serverFromProperties.serviceId}`,
-        { Url: `http://${nodeFromPoperties.ip}:${serverFromProperties.publishedPortWeb}` },
-        {
-          auth: {
-            username: 'admin',
-            password: process.env.ADMIN_PASSWORD
-          },
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+    // Recover common properties of a 'Modality' and an 'OrthancServer' servers.
+    const aetFrom = serverFrom.records[0].get('n').properties.aet;
+    const aetTo = serverTo.records[0].get('n').properties.aet;
+    const targetPortDicomFrom = serverFrom.records[0].get('n').properties.publishedPortDicom;
+    const targetPortDicomTo = serverTo.records[0].get('n').properties.publishedPortDicom;
 
-    } catch (err) {
-      log(`Error when adding a peer to ${reqBody.to}: ${err.message}`);
-    }
-      
-    // Add the modality to the server 'to'.
-    try {
-      const response = await axios.put(
-        `http://${nodeToPoperties.ip}:${serverToProperties.publishedPortWeb}/modalities/${serverFromProperties.serviceId}`,
+    // Recover the IP address of the 'to' server and add modality to OrthancServer.
+    let ipTo;
+    if (serverTo.records[0].get('n').labels.includes("OrthancServer")) {
+      ipTo = serverTo.records[0].get('h').properties.ip
+
+      await DicomService.putModalityToOrthancServer(
+        ipTo, 
+        serverTo.records[0].get('n').properties.publishedPortWeb,
+        serverFrom.records[0].get('n').properties.uuid,
         {
-          AET: serverFromProperties.aet,
-          AllowEcho: reqBody.allowEcho,
-          AllowFind: reqBody.allowFind,
-          AllowFindWorklist: false,
-          AllowGet: reqBody.allowGet,
-          AllowMove: reqBody.allowMove,
-          AllowStorageCommitment: false,
-          AllowStore: reqBody.allowStore,
-          AllowTranscoding: false,
-          Host: nodeFromPoperties.ip,
-          Port: serverFromProperties.publishedPortDicom,
-          Timeout: 0,
-          UseDicomTls: false
-        },
-        {
-          auth: {
-            username: 'admin',
-            password: process.env.ADMIN_PASSWORD
-          },
-          headers: {
-            'Content-Type': 'application/json'
-          }
-      });
-    } catch (err) {
-      log(`Error when adding a modality to ${reqBody.to}: ${err.message}`);
+          "AET": aetFrom,
+          "AllowEcho": reqBody.allowEcho,
+          "AllowFind": reqBody.allowFind,
+          "AllowGet": reqBody.allowGet,
+          "AllowMove": reqBody.allowMove,
+          "AllowStore": reqBody.allowStore,
+          "AllowFindWorklist": false,
+          "AllowStorageCommitment": false,
+          "AllowTranscoding": false,
+          "UseDicomTls": false,
+          "Host": ipFrom,
+          "Port": targetPortDicomFrom,
+        }
+      )
+    } else {
+      ipTo = serverTo.records[0].get('n').properties.ip
     }
 
     // Add the modality to the server from if the modality is not already present.
-    if (isReverseMissing) {
-      try {
-        const response = await axios.put(
-          `http://${nodeFromPoperties.ip}:${serverFromProperties.publishedPortWeb}/modalities/${serverToProperties.serviceId}`,
-          {
-            AET: serverToProperties.aet,
-            AllowEcho: false,
-            AllowFind: false,
-            AllowFindWorklist: false,
-            AllowGet: false,
-            AllowMove: false,
-            AllowStorageCommitment: false,
-            AllowStore: false,
-            AllowTranscoding: false,
-            Host: nodeToPoperties.ip,
-            Port: serverToProperties.publishedPortDicom,
-            Timeout: 0,
-            UseDicomTls: false
-          },
-          {
-            auth: {
-              username: 'admin',
-              password: process.env.ADMIN_PASSWORD
-            },
-            headers: {
-              'Content-Type': 'application/json'
-            }
-        });
-      } catch (err) {
-        log(`Error when adding a modality to ${reqBody.from}: ${err.message}`);
-      }
+    if (isReverseMissing && serverFrom.records[0].get('n').labels.includes("OrthancServer")) {
+      await DicomService.putModalityToOrthancServer(
+        ipFrom, 
+        serverFrom.records[0].get('n').properties.publishedPortWeb,
+        serverTo.records[0].get('n').properties.uuid,
+        {
+          "AET": aetTo,
+          "Host": ipFrom,
+          "Port": targetPortDicomTo
+        }
+      )
         
     }
   }
@@ -184,7 +211,7 @@ class DicomService {
         try {
           // Perform the DICOM echo request
           await axios.post(
-            `http://${relation.get('h_from').properties.ip}:${relation.get('n_from').properties.publishedPortWeb}/modalities/${relation.get('n_to').properties.serviceId}/echo`,
+            `http://${relation.get('h_from').properties.ip}:${relation.get('n_from').properties.publishedPortWeb}/modalities/${relation.get('n_to').properties.uuid}/echo`,
             { "CheckFind": false, "Timeout": 0 },
             {
               auth: {
@@ -231,39 +258,69 @@ class DicomService {
       const modalities = await tx.run(`
         MATCH (m_from)-[r:CONNECTED_TO]->(m_to) 
         WHERE elementId(r) = $id 
-        RETURN m_from, m_to
+        OPTIONAL MATCH (m_to)-[reversed_r:CONNECTED_TO]->(m_from)
+        RETURN m_from, m_to, reversed_r
         `,
         reqBody
       );
+      
       if (modalities.records.length === 0) {
         throw new Error(`No link found in the database between ${reqBody.from} and ${reqBody.to}`);
       }
+      const isReverse = (modalities.records[0].get('reversed_r') !== null)
       // Check if the 'to' server is an Orthanc server.
       if (modalities.records[0].get('m_to').labels.includes("OrthancServer")) {
-        // Get the host IP address of "to" server from the database.
-        const host = await tx.run(`
-          MATCH (m_to:OrthancServer {serviceId: $serviceId})-[:RUNNING]->(h_to:SwarmNode) 
-          RETURN h_to
-          `,
-          modalities.records[0].get('m_to').properties
-        );
-        if (host.records.length === 0) {
-          throw new Error(`No host found in the database for ${reqBody.to}`);
-        }
-        const hostIp = host.records[0].get('h_to').properties.ip;
+        let hostIp = await Neo4jDriver.recoverNodeIp(modalities.records[0].get('m_to'), tx);
         const publishedPortWeb = modalities.records[0].get('m_to').properties.publishedPortWeb;
-        // Perform the delete request to the Orthanc server.
+        // If it is reversed, keep the modality in the Orthanc server to ensure the reversed communication.
+        if (isReverse) {
+          await DicomService.putModalityToOrthancServer(
+            hostIp,
+            publishedPortWeb,
+            modalities.records[0].get('m_from').properties.uuid,
+            {
+              "AET": modalities.records[0].get('m_to').properties.aet,
+              "Host": hostIp,
+              "Port": modalities.records[0].get('m_to').properties.publishedPortDicom,
+              "AllowEcho": false,
+              "AllowFind": false,
+              "AllowGet": false,
+              "AllowMove": false,
+              "AllowStore": false
+            }
+          )
+        } else {
+          // If it is not reversed, delete the modality from the Orthanc server.
+          try {
+            await axios.delete(`http://${hostIp}:${publishedPortWeb}/modalities/${modalities.records[0].get('m_from').properties.uuid}`, 
+            {
+              auth: {
+                username: 'admin',
+                password: process.env.ADMIN_PASSWORD
+              }
+            });
+          } catch (error) {
+            throw new Error(`Request to delete the modality to ${reqBody.to} failed: ${error.message}`);
+          }
+        }
+      }
+      // Delete the modality in the 'from' Orthanc server if it is not reversed.
+      if (modalities.records[0].get('m_from').labels.includes("OrthancServer") && !isReverse) {
+        let hostIp = await Neo4jDriver.recoverOrthancServerIp(modalities.records[0].get('m_from').properties.serviceId, tx);
+        const publishedPortWeb = modalities.records[0].get('m_from').properties.publishedPortWeb;
         try {
-          await axios.delete(`http://${hostIp}:${publishedPortWeb}/modalities/${modalities.records[0].get('m_from').properties.serviceId}`, {
+          await axios.delete(`http://${hostIp}:${publishedPortWeb}/modalities/${modalities.records[0].get('m_to').properties.uuid}`, 
+          {
             auth: {
               username: 'admin',
               password: process.env.ADMIN_PASSWORD
             }
           });
         } catch (error) {
-          throw new Error(`Request ( http://${hostIp}:${publishedPortWeb}/modalities/${modalities.records[0].get('m_from').properties.serviceId}  password ${process.env.ADMIN_PASSWORD}) to delete the modality to ${reqBody.to} failed: ${error.message}`);
+          throw new Error(`Request to delete the modality to ${reqBody.to} failed: ${error.message}`);
         }
       }
+
       // Delete the link in the database.
       await tx.run(`
         MATCH (m_from)-[r:CONNECTED_TO]->(m_to) 
