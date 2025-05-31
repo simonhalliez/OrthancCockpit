@@ -27,17 +27,8 @@
                 <input bind:value={modalityValue.ip} type="text" class="form-control rounded-3" id="ip" placeholder="Ex: 192.168.129.96" maxlength="39" required>
             </div>
             <div class="mb-3">
-                <p class="form-label fs-5">Ports DICOM:</p>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="mb">
-                        <label for="publishedPortDicom" class="form-label fs-7">Published:</label>
-                        <input bind:value={modalityValue.publishedPortDicom} type="text" class="form-control rounded-3" id="publishedPortDicom" placeholder="Ex: 104" pattern="\d+" required>
-                    </div>
-                    <div class="mb">
-                        <label for="outputPortDicom" class="form-label fs-7">Output:</label>
-                        <input bind:value={modalityValue.outputPortDicom} type="text" class="form-control rounded-3" id="outputPortDicom" placeholder="Ex: 4242" pattern="\d+" required>
-                    </div>
-                </div>
+                <label for="publishedPortDicom" class="form-label fs-7">Port DICOM:</label>
+                <input bind:value={modalityValue.publishedPortDicom} type="text" class="form-control rounded-3" id="publishedPortDicom" placeholder="Ex: 104" pattern="\d+" required>
             </div>
             <div class="mb-3">
                 <label for="description" class="form-label fs-5">Description:</label>

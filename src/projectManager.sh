@@ -20,24 +20,11 @@ case "$1" in
         # docker build -t front-end ./front-end/
         docker stack deploy -c orthancCockpit.yml orthancCockpit
 
-        sleep 40
 
+    ;;
+    "add_server")
+        export PUBLIC_IP_MANAGER=${2}
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_Orthanc_server \
-            -H "Content-Type: application/json" \
-            -d '{
-                "orthancName": "cardiology_4",
-                "aet": "CARDIOLOGY_4",
-                "ip": "",
-                "hostNameSwarm": "OrthancManager",
-                "publishedPortDicom": "4244",
-                "publishedPortWeb": "8084",
-                "targetPortDicom": "4242",
-                "targetPortWeb": "8042",
-                "visX": 0,
-                "visY": 0,
-                "status": false
-            }'
-            curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_Orthanc_server \
             -H "Content-Type: application/json" \
             -d '{
                 "orthancName": "cardiology_3",
@@ -50,9 +37,114 @@ case "$1" in
                 "targetPortWeb": "8042",
                 "visX": 0,
                 "visY": 0,
-                "status": false
+                "status": "pending",
+                "uuid": "",
+                "tags": []
             }'
-
+        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_Orthanc_server \
+            -H "Content-Type: application/json" \
+            -d '{"orthancName": "cardiology_4",
+                "aet": "CARDIOLOGY_4",
+                "ip": "",
+                "hostNameSwarm": "OrthancManager",
+                "publishedPortDicom": "4244",
+                "publishedPortWeb": "8084",
+                "targetPortDicom": "4242",
+                "targetPortWeb": "8042",
+                "visX": 0,
+                "visY": 0,
+                "status": "pending",
+                "uuid": "",
+                "tags": []
+            }'
+        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_modality \
+            -H "Content-Type: application/json" \
+            -d '{
+                "aet": "CT_CARDIO_105",
+                "ip": "192.168.129.93",
+                "publishedPortDicom": "4242",
+                "description": "Room: a.105\nModel: NAEOTOM Alpha class\nCT-scan of the cardiology service. \nPseudo: admin\nPassword: serf34$QDfse\nLast review: 23/05/2025",
+                "status": "pending",
+                "visX": 0,
+                "visY": 0,
+                "uuid": "",
+                "tags": []
+            }'
+        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+            -H "Content-Type: application/json" \
+            -d '{
+                "from": "CT_CARDIO_105",
+                "to": "CARDIOLOGY_4",
+                "status": false,
+                "allowEcho": true,
+                "allowFind": false,
+                "allowGet": false,
+                "allowMove": false,
+                "allowStore": false,
+                "id": "",
+                "uuidFrom": "",
+                "uuidTo": ""
+            }'
+        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+            -H "Content-Type: application/json" \
+            -d '{
+                "from": "CT_CARDIO_105",
+                "to": "CARDIOLOGY_3",
+                "status": false,
+                "allowEcho": true,
+                "allowFind": false,
+                "allowGet": false,
+                "allowMove": false,
+                "allowStore": false,
+                "id": "",
+                "uuidFrom": "",
+                "uuidTo": ""
+            }'
+        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+            -H "Content-Type: application/json" \
+            -d '{
+                "from": "CARDIOLOGY_4",
+                "to": "CT_CARDIO_105",
+                "status": false,
+                "allowEcho": true,
+                "allowFind": false,
+                "allowGet": false,
+                "allowMove": false,
+                "allowStore": false,
+                "id": "",
+                "uuidFrom": "",
+                "uuidTo": ""
+            }'
+        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+            -H "Content-Type: application/json" \
+            -d '{
+                "from": "CARDIOLOGY_3",
+                "to": "CARDIOLOGY_4",
+                "status": false,
+                "allowEcho": true,
+                "allowFind": false,
+                "allowGet": false,
+                "allowMove": false,
+                "allowStore": false,
+                "id": "",
+                "uuidFrom": "",
+                "uuidTo": ""
+            }'
+            curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+            -H "Content-Type: application/json" \
+            -d '{
+                "from": "CARDIOLOGY_4",
+                "to": "CARDIOLOGY_3",
+                "status": false,
+                "allowEcho": true,
+                "allowFind": false,
+                "allowGet": false,
+                "allowMove": false,
+                "allowStore": false,
+                "id": "",
+                "uuidFrom": "",
+                "uuidTo": ""
+            }'
     ;;
     "leave")
         docker swarm leave --force

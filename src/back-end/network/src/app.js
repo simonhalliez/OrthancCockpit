@@ -13,9 +13,9 @@ const PASSWORD = process.env.ADMIN_PASSWORD || 'password';
 const neo4jDriver = new Neo4jDriver(DB_IP, PASSWORD);
 neo4jDriver.connect();
 const swarmService = new SwarmService(neo4jDriver);
-const orthancService = new OrthancService(neo4jDriver);
 const modalityService = new ModalityService(neo4jDriver);
 const dicomService = new DicomService(neo4jDriver);
+const orthancService = new OrthancService(neo4jDriver, dicomService);
 swarmService.addInitialSwarmNodes();
 swarmService.updateSwarmNodes();
 
@@ -102,21 +102,22 @@ app.post('/update_node_position', (req, res) => {
 });
 
 app.get('/update_status', async (req, res) => {
-  await orthancService.updateServerStatus();
-  return dicomService.testDicomConnections()
-  .then(() => {
+  try {
+    await orthancService.updateServerStatus();
+    await dicomService.testDicomConnections()
+    await modalityService.updateModalitiesStatus();
     return res.status(200).json({
       status: 'ok'
     });
-  })
-  .catch((err) => {
+  }
+  catch (err) {
     log("Error when updating status: ", err);
     return res.status(500).json({
       status: 'error',
       message: 'Failed to update status',
       error: err.message
     });
-  });
+  }
 });
 
 app.post('/delete_node', (req, res) => {
@@ -179,4 +180,64 @@ app.post('/edit_modality', (req, res) => {
   });
 })
 
+app.post('/tag_node', (req, res) => {
+  return orthancService.addTag(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when adding the tag: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to add the tag',
+      error: err.message
+    });
+  });
+})
+
+app.post('/untag_node', (req, res) => {
+  return orthancService.untagNode(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when untagging the node: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to untagging the node: ',
+      error: err.message
+    });
+  });
+})
+
+app.get('/get_tags', (req, res) => {
+  return neo4jDriver.getTags().then((result) => {
+    return res.status(200).json({
+      status: 'ok',
+      data: result
+    });
+  }).catch((err) => {
+    log("Error when retrieving tags: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve tags: ',
+      error: err.message
+    });
+  });
+})
+
+app.post('/edit_tag', (req, res) => {
+  return neo4jDriver.editTag(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when editing tag: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to edit the tag: ',
+      error: err.message
+    });
+  });
+})
 module.exports = app;

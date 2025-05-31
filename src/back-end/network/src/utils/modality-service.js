@@ -12,7 +12,6 @@ class ModalityService {
             SET m.aet = $aet, 
             m.ip = $ip, 
             m.publishedPortDicom = $publishedPortDicom, 
-            m.outputPortDicom = $outputPortDicom, 
             m.status = $status, 
             m.visX = $visX, 
             m.visY = $visY, 
@@ -30,7 +29,6 @@ class ModalityService {
                 SET m.aet = $aet, 
                 m.ip = $ip, 
                 m.publishedPortDicom = $publishedPortDicom, 
-                m.outputPortDicom = $outputPortDicom, 
                 m.status = $status, 
                 m.visX = $visX, 
                 m.visY = $visY, 
@@ -43,6 +41,34 @@ class ModalityService {
         })
         await session.close();
         
+    }
+
+    async updateModalitiesStatus() {
+        try {
+            let session =this.neo4jDriver.driver.session();
+            await session.executeWrite( async (tx) => {
+                // Update the modality node with the new properties in database
+                // Set status to 'up' where there is at least one active connection
+                await tx.run(`
+                    MATCH (o:OrthancServer)-[c:CONNECTED_TO]->(m:Modality) 
+                    WHERE c.status = true 
+                    SET m.status = 'up'
+                    `
+                );
+                // Set status to 'down' where there are no active connections
+                await tx.run(`
+                    MATCH (m:Modality)
+                    WHERE NOT EXISTS {
+                        MATCH (:OrthancServer)-[c:CONNECTED_TO {status: true}]->(m)
+                    }
+                    SET m.status = 'pending'
+                `);
+                
+            })
+            await session.close();
+        } catch (error) {
+            log('Error updating modalities status:', error);
+        }
     }
 }
 

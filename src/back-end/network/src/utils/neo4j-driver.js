@@ -29,27 +29,31 @@ class Neo4jDriver {
     )}
 
   async retrieveNetwork() {
-    const network = { nodes: {orthancServer: [], dicomModalities: []}, edges: [] };
+    const network = { nodes: [], edges: [] };
     let session = this.driver.session();
     await session.executeRead( async (tx) => {
-      const resultOrthancServer = await tx.run(
-        'MATCH (n: OrthancServer)-[r:RUNNING]->(s:SwarmNode) ' +
-        'RETURN n, s'
+      const resultOrthancServer = await tx.run(`
+        MATCH (n: OrthancServer)-[r:RUNNING]->(s:SwarmNode)
+        OPTIONAL MATCH (tag)-[:TAG]->(n) 
+        RETURN n, s, COLLECT(tag {.*}) AS tags`
       )
-      network.nodes.orthancServers = resultOrthancServer.records.map(record => ({
+      network.nodes = resultOrthancServer.records.map(record => ({
         ...record.get('n').properties,
         ip: record.get('s').properties.ip,
         uuid: record.get('n').properties.uuid,
+        tags: record.get('tags')
       }));
 
-      const resultModalities = await tx.run(
-        'MATCH (m: Modality) ' +
-        'RETURN m'
+      const resultModalities = await tx.run(`
+        MATCH (m: Modality) 
+        OPTIONAL MATCH (tag)-[:TAG]->(m) 
+        RETURN m, COLLECT(tag {.*}) AS tags`
       )
-      network.nodes.dicomModalities = resultModalities.records.map(record => ({
+      network.nodes = [...network.nodes, ...resultModalities.records.map(record => ({
         ...record.get('m').properties,
         uuid: record.get('m').properties.uuid,
-      }));
+        tags: record.get('tags')
+      }))];
       const resultEdge = await tx.run(
         'MATCH (n)-[r:CONNECTED_TO]->(m) ' +
         'WHERE n.aet IS NOT NULL AND m.aet IS NOT NULL ' +
@@ -74,6 +78,22 @@ class Neo4jDriver {
     return network;
   }
 
+  async getTags() {
+    const res = await this.driver.executeQuery(`
+      MATCH (tags:Tag)
+      RETURN COLLECT(tags {.*}) AS tag`);
+    return res.records[0].get('tag');
+  }
+
+  async editTag(reqBody) {
+    return await this.driver.executeQuery(`
+      MATCH (tag:Tag {name: $tagName})
+      SET tag.name = $newName,
+      tag.color = $newColor
+      RETURN tag`,
+      reqBody
+    )
+  }
 
   static async recoverOrthancServerIp(serviceId, tx) {
     let hostResult = await tx.run(`
@@ -95,6 +115,8 @@ class Neo4jDriver {
       return nodeElement.properties.ip;
     }
   }
+
+
 
 }
 

@@ -53,6 +53,74 @@ class DicomService {
     }
   }
 
+  static async isOrthancServerUp(ip, portWeb) {
+    let isServerUp = false;
+
+    while (!isServerUp) {
+      try {
+        const response = await axios.get(`http://${ip}:${portWeb}/system`, {
+          auth: {
+            username: 'admin',
+            password: process.env.ADMIN_PASSWORD
+          }
+        });
+        isServerUp = (response.status === 200);
+      } catch (err) {
+        log(`Orthanc health check failed: http://${ip}:${portWeb}/system`, err.message);
+      }
+      if (!isServerUp) {
+        // Optional: wait before retrying to avoid spamming
+        log("Start wait ")
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        log("End wait ")
+      }
+    }
+  }
+
+  static async transferAllInstances(sourceIp, sourcePort, targetUuid) {
+    // Get all instances from source
+    let instanceIds;
+    try {
+      instanceIds = (await axios.get(`http://${sourceIp}:${sourcePort}/instances`,
+        {
+            auth: {
+              username: 'admin',
+              password: process.env.ADMIN_PASSWORD
+            }
+        }
+      )).data;
+    } catch (err) {
+      throw new Error("Fail to recover instances for transfert: " + err.message);
+    }
+    log(instanceIds);
+
+    // Send all to the target Orthanc via modality
+    try {
+      const res = await axios.post(
+        `http://${sourceIp}:${sourcePort}/modalities/${targetUuid}/store`, 
+        {
+          "Asynchronous": false,
+          "Permissive": true,
+          "Resources": instanceIds,
+          "StorageCommitment": true,
+          "Synchronous": true,
+          },
+        {
+            auth: {
+              username: 'admin',
+              password: process.env.ADMIN_PASSWORD
+            },
+            headers: {
+              'Content-Type': 'application/json'
+            }
+        }
+      );
+    } catch(err) {
+      throw new Error(`Fail to transfert instances (http://${sourceIp}:${sourcePort}/modalities/${targetUuid}/store): ${err.message}`);
+    }
+    log("Transfert done");
+  }
+
   static async deleteConnectedOrthancServer(nodeProperties, tx) {
     // Update the 'from' Orthanc servers that are connected to the modified Orthanc server.
     let connectedOrthancServers = await tx.run(`
@@ -62,7 +130,6 @@ class DicomService {
       RETURN server, host`,
       nodeProperties
     );
-    log(connectedOrthancServers.records.length)
     for (const connectedOrthancServer of connectedOrthancServers.records) {
       const serverFromProperties = connectedOrthancServer.get('server').properties;
       const hostFromProperties = connectedOrthancServer.get('host').properties;
@@ -75,13 +142,12 @@ class DicomService {
           }
         });
       } catch (error) {
-        throw new Error(`Request to delete the modality http://${hostFromProperties.ip}:${serverFromProperties.publishedPortDicom}/modalities/${nodeProperties.uuid} failed: ${error.message}`);
+        log(`Request to delete the modality http://${hostFromProperties.ip}:${serverFromProperties.publishedPortDicom}/modalities/${nodeProperties.uuid} failed: ${error.message}`);
       }
     }
   }
 
   async addEdge(reqBody) {
-    log(process.env.ADMIN_PASSWORD)
     let serverFrom = null;
     let serverTo = null;
     let session = this.neo4jDriver.driver.session();
@@ -190,7 +256,7 @@ class DicomService {
         serverTo.records[0].get('n').properties.uuid,
         {
           "AET": aetTo,
-          "Host": ipFrom,
+          "Host": ipTo,
           "Port": targetPortDicomTo
         }
       )

@@ -4,7 +4,7 @@
 </script>
 
 <button type="button" 
-    class="btn rounded-pill position-relative btn btn-outline-light"
+    class="btn rounded-pill position-relative btn btn-outline-light btn-sm"
     style="border-width: 3px; font-size: 1.25rem; color: #0D47A1; border-color: #0D47A1;"
     on:click={onClick}
 >

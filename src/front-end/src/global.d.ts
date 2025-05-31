@@ -2,10 +2,11 @@ type BaseNode = {
     aet: string;
     ip: string;
     publishedPortDicom: string;
-    status: boolean;
+    status: string;
     visX: number;
     visY: number;
     uuid: string;
+    tags: Tag[];
 };
 
 interface OrthancServer extends BaseNode {
@@ -18,7 +19,6 @@ interface OrthancServer extends BaseNode {
 
 interface DICOMModality extends BaseNode {
     description: string;
-    outputPortDicom: string;
 }
 
 type DicomNode = OrthancServer | DICOMModality;
@@ -38,6 +38,11 @@ type Edge = {
 };
 
 type Network = {
-    nodes: {orthancServers: OrthancServer[]; dicomModalities: DICOMModality[]};
+    nodes: DicomNode[];//{orthancServers: OrthancServer[]; dicomModalities: DICOMModality[]};
     edges: Edge[];
 };
+
+type Tag = {
+    name: string;
+    color: string;
+}

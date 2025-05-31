@@ -5,14 +5,13 @@ import { env } from "$env/dynamic/public";
 
 const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
 
-function createNetwork() {
-    const { subscribe, set, update}: Writable<Network> = writable<Network>({nodes: [],edges: []})
+function createTags() {
+    const { subscribe, set, update}: Writable<Tag[]> = writable<Tag[]>([]);
 
     return {
         subscribe,
-        update,
-        updateNetwork: () => {
-            axios.get(`http://${ipManager}:3002/network`)
+        updateTags: () => {
+            axios.get(`http://${ipManager}:3002/get_tags`)
             .then((res) => {
                 set(res.data.data);
             })
@@ -23,4 +22,4 @@ function createNetwork() {
     }
 }
 
-export const network = createNetwork();
+export const tags = createTags();

@@ -25,7 +25,9 @@
 		targetPortWeb: '',
 		visX: 0.0,
 		visY: 0.0,
-		status: false
+		status: 'pending',
+		uuid: '',
+		tags: []
 	};
 
 	const initialAddLinkValues:Edge = {
@@ -37,7 +39,9 @@
 		allowGet: false,
 		allowMove: false,
 		allowStore: false,
-		id: ''
+		id: '',
+		uuidFrom: '',
+		uuidTo: '',
 
 	};
 
@@ -45,11 +49,12 @@
 		aet: '',
 		ip: '',
 		publishedPortDicom: '',
-		outputPortDicom: '',
 		description: '',
-		status: false,
+		status: 'pending',
 		visX: 0.0,
-    	visY: 0.0
+    	visY: 0.0,
+		uuid: '',
+		tags: []
 	};
 
 	let addServerValues:OrthancServer = { ...initialAddServerValues };
@@ -104,23 +109,28 @@
 	}
 </script>
 
-
-
-<!-- Header-->
-<header class="py-6 bg-blue-900">
-	<div class="grid grid-flow-col gap-4 px-8">
-		<button type="button" on:click={clickLogo} style="cursor: pointer; background: none; border: none; padding: 0;">
-			<img src="/OrthancLogo.png" alt="logo" class="w-1/3 h-auto">
-		</button>
-		<ButtonHeader text="Add a modality" onClick={()=> showAddModality=true}/>
-		<ModalityFormWindow bind:showServerForm={showAddModality} bind:modalityValue={addModalityValues} submit={addModality} editMode={false}/>
-		<ButtonHeader text="Add a server" onClick={()=> showAddServer=true}/>
-		<ServerFromWindow bind:showServerForm={showAddServer} bind:serverValues={addServerValues} submit={addServer} editMode={false}/>
-		<ButtonHeader text="Add link" onClick={()=> showAddLink=true}/>
-		<EdgesFormWindow bind:showEdgeForm={showAddLink} bind:edgeValues={addLinkValues} submit={addLink} editMode={false}/>
-		<ButtonHeader text="Log out" onClick={()=>goto('/login')}/>
+<div class="d-flex flex-column min-vh-100" style="overflow: hidden;">
+	<!-- Header -->
+	<header class="py-6 bg-blue-900">
+		<div class="grid grid-flow-col gap-4 px-8">
+			<button type="button" on:click={clickLogo} style="cursor: pointer; background: none; border: none; padding: 0;">
+				<img src="/OrthancLogo.png" alt="logo" class="w-1/3 h-auto">
+			</button>
+			<ButtonHeader text="Add a modality" onClick={()=> showAddModality=true}/>
+			<ModalityFormWindow bind:showServerForm={showAddModality} bind:modalityValue={addModalityValues} submit={addModality} editMode={false}/>
+			<ButtonHeader text="Add a server" onClick={()=> showAddServer=true}/>
+			<ServerFromWindow bind:showServerForm={showAddServer} bind:serverValues={addServerValues} submit={addServer} editMode={false}/>
+			<ButtonHeader text="Add link" onClick={()=> showAddLink=true}/>
+			<EdgesFormWindow bind:showEdgeForm={showAddLink} bind:edgeValues={addLinkValues} submit={addLink} editMode={false}/>
+			<ButtonHeader text="Log out" onClick={()=>goto('/login')}/>
+		</div>
+	</header>
+  
+	<!-- Main Content -->
+	<div class="flex-grow-1 d-flex position-relative">
+	  <!-- Graph Section -->
+	  <Graph />
 	</div>
-</header>	
+  </div>
 
-<Graph />
 

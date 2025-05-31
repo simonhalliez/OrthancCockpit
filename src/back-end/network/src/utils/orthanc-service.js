@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
 const log = require('debug')('network-d');
 const { DockerService } = require('./docker-service');
@@ -7,8 +9,70 @@ const { DicomService } = require('./dicom-service');
 
 
 class OrthancService {
-  constructor(neo4jDriver) {
+  constructor(neo4jDriver, dicomService) {
     this.neo4jDriver = neo4jDriver;
+    this.dicomService = dicomService;
+  }
+
+  static async createConfigurationFile(serverInfo, tx) {
+    let secretName = `sec_${serverInfo.uuid}_V${serverInfo.configurationNumber}`;
+    // Add the modality to the Orthanc server, they are not stored on this host.
+    let modalities = await tx.run(`
+      MATCH (edit_server:OrthancServer{uuid:$uuid})-[dicomLink:CONNECTED_TO]-(modality)
+      OPTIONAL MATCH (modality)-[:RUNNING]->(host:SwarmNode)
+      RETURN DISTINCT modality.uuid as modalityId,
+      {
+        AET: modality.aet,
+        AllowEcho: dicomLink.allowEcho, 
+        AllowFind: dicomLink.allowFind, 
+        AllowGet: dicomLink.allowGet, 
+        AllowMove: dicomLink.allowMove, 
+        AllowStore: dicomLink.allowStore, 
+        Port: modality.publishedPortDicom, 
+        Host: COALESCE(modality.ip, host.ip)
+      } as payload`,
+      serverInfo
+    )
+    let modalitiesConfig = {};
+    for (let i = 0; i < modalities.records.length; i++) {
+      let modality = modalities.records[i];
+      let payLoad = {
+        ...modality.get('payload'),
+        "AllowFindWorklist": false,
+        "AllowStorageCommitment": false,
+        "AllowTranscoding": false,
+        "UseDicomTls": false,
+          
+      };
+      modalitiesConfig[modality.get('modalityId')] = payLoad;
+    }
+    let config = {
+      "Name": serverInfo.orthancName,
+      "DicomAet": serverInfo.aet,
+      "DicomPort": Number(serverInfo.targetPortDicom),
+      "HttpPort": Number(serverInfo.targetPortWeb),
+      "RemoteAccessAllowed": true,
+      "HttpServerEnabled": true,
+      "DicomAlwaysAllowEcho" : false,
+      "DicomAlwaysAllowStore" : false,
+      "DicomTlsEnabled" : false,
+      "RegisteredUsers" : {
+          "admin" : process.env.ADMIN_PASSWORD
+      },
+      "StorageDirectory": "/var/lib/orthanc/db/",
+      "DicomModalities" : modalitiesConfig
+    };
+    // Prepare output file path
+    const outputFilePath = path.join(__dirname, '../../templates', `${secretName}.json`);
+
+    // Write the modified config to a new JSON file
+    fs.writeFile(outputFilePath, JSON.stringify(config, null, 2), (err) => {
+        if (err) {
+            log('Error writing output file:', err);
+        } else {
+            log(`Config saved to ${outputFilePath}`);
+        }
+    });
   }
 
   async addOrthancServer(reqBody) {
@@ -17,6 +81,7 @@ class OrthancService {
     reqBody.configurationNumber = 0;
     // Adding the Orthanc server to the database.
     let session = this.neo4jDriver.driver.session();
+    let newServerResult;
     await session.executeWrite( async (tx) => {
 
       // Check if the node exists in the database.
@@ -31,14 +96,9 @@ class OrthancService {
         throw new Error(`Multiple nodes found with name ${reqBody.hostNameSwarm}`);
       }
 
-      const resultNode = await tx.run(`
-        MERGE (n:Counter {name: 'orthancServerCounter'})
-        ON CREATE SET n.count = 0
-        ON MATCH SET n.count = n.count + 1
-        RETURN n.count
-        `
-      );
-      const serverNumber =  resultNode.records[0].get('n.count').toInt();
+      reqBody.uuid = uuidv4();
+      // Create the Docker secret for the Orthanc server with configuration.
+      await OrthancService.createConfigurationFile(reqBody, tx);
 
       // Create the Orthanc service for the new server
       let serviceResult = "";
@@ -46,23 +106,21 @@ class OrthancService {
         serviceResult = await DockerService.runCommand('bash', [
           'orthancManager.sh',
           'new_server',
-          reqBody.orthancName,
-          reqBody.aet,
           reqBody.hostNameSwarm,
           reqBody.publishedPortWeb,
           reqBody.targetPortWeb,
           reqBody.publishedPortDicom,
           reqBody.targetPortDicom,
-          serverNumber,
+          reqBody.uuid,
           reqBody.configurationNumber
         ]);
-        log(`Orthanc service created successfully:\n${serviceResult}`);
+        log(`Orthanc service created successfully:\n`);
       } catch (err) {
         throw new Error(`Error creating the Docker service: ${err.message}`);
       }
       const res = JSON.parse(serviceResult.trim());
       // Create the Orthanc server node in DB.
-      await tx.run(`
+      newServerResult = await tx.run(`
         MERGE (o:OrthancServer {uuid: $uuid}) 
         SET o.serviceId = $serviceId, 
         o.orthancName = $orthancName, 
@@ -77,10 +135,10 @@ class OrthancService {
         o.aet = $aet,
         o.secretName = $secretName,
         o.volumeName = $volumeName,
-        o.configurationNumber = $configurationNumber,
-        o.serverNumber = $serverNumber
+        o.configurationNumber = $configurationNumber
+        RETURN o
         `,
-        {...reqBody,...res, serverNumber: serverNumber, uuid: uuidv4()}
+        {...reqBody,...res}
         
       )
       // Create the relationship between the Orthanc server and the Swarm node.
@@ -95,7 +153,8 @@ class OrthancService {
         }
       )
     })
-    await session.close();    
+    await session.close();
+    return newServerResult.records[0].get('o').properties;  
   }
 
   async updateServerStatus() {
@@ -119,12 +178,12 @@ class OrthancService {
           const replicaNumber = parseInt(service.replica.charAt(0));
           if ( replicaNumber === 0) {
             await tx.run(
-              'MATCH (n:OrthancServer {serviceId: $serviceId}) SET n.status = false',
+              'MATCH (n:OrthancServer {serviceId: $serviceId}) SET n.status = "down"',
               { serviceId }
             );
           } else {
             await tx.run(
-              'MATCH (n:OrthancServer {serviceId: $serviceId}) SET n.status = true',
+              'MATCH (n:OrthancServer {serviceId: $serviceId}) SET n.status = "up"',
               { serviceId }
             );
           }
@@ -196,7 +255,6 @@ class OrthancService {
   }
 
   async editServer(reqBody) {
-    log("Editing server: ", reqBody);
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
       // Check if the node exists in the database.
@@ -211,67 +269,178 @@ class OrthancService {
       if (nodeResult.records.length > 1) {
         throw new Error(`Multiple nodes found with uuid ${reqBody.uuid}`);
       }
-      const nodeProperties = nodeResult.records[0].get('n').properties;
+      let nodeProperties = nodeResult.records[0].get('n').properties;
+      let hostToIp = reqBody.ip;
+
+      // Get the IP of the new host.
+      if (reqBody.hostNameSwarm !== nodeProperties.hostNameSwarm) {
+        let newHostTo = await tx.run(`
+          MATCH (host_to:SwarmNode{name: $hostNameSwarm}) 
+          RETURN host_to`,
+          reqBody
+        );
+        if (newHostTo.records.length === 0) {
+          throw new Error(`No swarm node found with name ${reqBody.hostNameSwarm}`);
+        }
+        if (newHostTo.records.length > 1) {
+          throw new Error(`Multiple nodes found with name ${reqBody.hostNameSwarm}`);
+        }
+        hostToIp = newHostTo.records[0].get('host_to').properties.ip;
+        
+        // Create a new orthanc server on the new host.
+        let isServerCreated = false;
+        const regex = /port '\d+' is already in use by service/;
+        let publishedPortDicom = Number(reqBody.publishedPortDicom) + 1;
+        let publishedPortWeb = Number(reqBody.publishedPortWeb) + 1;
+        let newServer;
+        while (!isServerCreated) {
+          try {
+            let new_server = {
+              "orthancName": reqBody.orthancName + "_TMP",
+              "aet": reqBody.aet + "_TMP",
+              "ip": "",
+              "hostNameSwarm": reqBody.hostNameSwarm,
+              "publishedPortDicom": publishedPortDicom,
+              "publishedPortWeb": publishedPortWeb,
+              "targetPortDicom": reqBody.targetPortDicom,
+              "targetPortWeb": reqBody.targetPortWeb,
+              "visX": 0,
+              "visY": 0,
+              "status": "pending",
+            };
+            newServer = await this.addOrthancServer(new_server);
+            isServerCreated = true;
+          } catch (err) {
+            publishedPortDicom += 1;
+            publishedPortWeb += 1;
+            if (!(regex.test(err.message.trim()))) {
+              // If the error message does not match the regex, throw the error
+              throw new Error(`Error when searching for free port of new host ${err.message}`);
+            }
+          }
+        }
+        await DicomService.isOrthancServerUp(hostToIp, publishedPortWeb);
+        const edgeValue = {
+          "from": reqBody.aet,
+          "to": reqBody.aet + "_TMP",
+          "status": false,
+          "allowEcho": true,
+          "allowFind": true,
+          "allowGet": true,
+          "allowMove": true,
+          "allowStore": true,
+          "id": "",
+          "uuidFrom": "",
+          "uuidTo": ""
+        }
+
+        // Add a connection between servers
+        await this.dicomService.addEdge(edgeValue);
+
+        // Transfer data between servers
+        await DicomService.transferAllInstances(reqBody.ip, nodeProperties.publishedPortWeb, newServer.uuid);
+
+        // Create DICOM links.
+        let bodiesToAddFromServer = await tx.run(`
+          MATCH (node {uuid: $uuid})  
+          MATCH (server)-[c:CONNECTED_TO]->(node)
+          RETURN {
+                  from: server.aet,
+                  to: $newAet,
+                  status: false,
+                  allowEcho: c.allowEcho,
+                  allowFind: c.allowFind,
+                  allowGet: c.allowGet,
+                  allowMove: c.allowMove,
+                  allowStore: c.allowStore
+                } AS body
+          `,
+          {uuid: nodeProperties.uuid, newAet: newServer.aet}
+        );
+        
+        for (const serverFrom of bodiesToAddFromServer.records) {
+          await this.dicomService.addEdge(serverFrom.get('body'));
+        }
+
+        let bodiesToAddToServer = await tx.run(`
+          MATCH (node {uuid: $uuid})  
+          MATCH (node)-[c:CONNECTED_TO]->(server)
+          RETURN {
+                  from: $newAet,
+                  to: server.aet,
+                  status: false,
+                  allowEcho: c.allowEcho,
+                  allowFind: c.allowFind,
+                  allowGet: c.allowGet,
+                  allowMove: c.allowMove,
+                  allowStore: c.allowStore
+                } AS body
+          `,
+          {uuid: nodeProperties.uuid, newAet: newServer.aet}
+        );
+        for (const serverTo of bodiesToAddToServer.records) {
+          // Do not add the edge created for transfert instances.
+          if (serverTo.get('body').to !== newServer.aet) {
+            await this.dicomService.addEdge(serverTo.get('body'));
+          }
+        }
+
+        // Remove the old server.
+        await this.deleteServer(nodeProperties)
+
+        // Change the nodeProperties and uuid of reqBody to change the port number and aet of the new server
+        // to desired one.
+        nodeProperties = newServer;
+        reqBody.uuid = newServer.uuid;
+      }
 
       // Update the Orthanc service for the new server.
       let serviceResult = "";
       reqBody.configurationNumber = nodeProperties.configurationNumber + 1;
+      await OrthancService.createConfigurationFile(reqBody, tx);
       try {
         serviceResult = await DockerService.runCommand('bash', [
           'orthancManager.sh',
           'new_server',
-          reqBody.orthancName,
-          reqBody.aet,
           reqBody.hostNameSwarm,
           reqBody.publishedPortWeb,
           reqBody.targetPortWeb,
           reqBody.publishedPortDicom,
           reqBody.targetPortDicom,
-          nodeProperties.serverNumber,
+          nodeProperties.uuid,
           reqBody.configurationNumber,
         ]);
-        log(`Orthanc service update successfully:\n${serviceResult}`);
+        log(`Orthanc service update successfully:\n`);
       } catch (err) {
         throw new Error(`Error creating the Docker service: ${err.message}`);
       }
       
       // Update the modalities in connected Orthanc servers.
-      if ((reqBody.hostNameSwarm !== nodeProperties.hostNameSwarm) ||
+      if (
           (reqBody.aet !== nodeProperties.aet) ||
           (reqBody.publishedPortDicom !== nodeProperties.publishedPortDicom)
         ) {
-        let hostToIp = reqBody.ip;
-        // Get the IP of the new host.
-        if (reqBody.hostNameSwarm !== nodeProperties.hostNameSwarm) {
-          let newHostTo = await tx.run(`
-            MATCH (host_to:SwarmNode{name: $hostNameSwarm}) 
-            RETURN host_to`,
-            reqBody
-          );
-          if (newHostTo.records.length === 0) {
-            throw new Error(`No swarm node found with name ${reqBody.hostNameSwarm}`);
-          }
-          if (newHostTo.records.length > 1) {
-            throw new Error(`Multiple nodes found with name ${reqBody.hostNameSwarm}`);
-          }
-          hostToIp = newHostTo.records[0].get('host_to').properties.ip;
-        }
-        await DicomService.updateConnectedOrthancServer(reqBody, hostToIp, tx)
+        
+        await DicomService.updateConnectedOrthancServer(reqBody, hostToIp, tx);
       }
 
       // Remove the old Docker secret for the Orthanc server.
       const res = JSON.parse(serviceResult.trim());
       let newSecretName = res.secretName;
-      if (newSecretName !== nodeProperties.secretName) {  
+      if (newSecretName !== nodeProperties.secretName) { 
+        const oldSecretFilePath = path.join(__dirname, '../../templates', `${nodeProperties.secretName.replace(/^.*?(sec_)/, '$1')}`);
         await DockerService.runCommand('docker', [
           'secret', 'rm', nodeProperties.secretName
+        ]);
+        await DockerService.runCommand('rm', [
+          oldSecretFilePath
         ]);
         reqBody.secretName = newSecretName;
       }
 
       // Update the Orthanc server in the database.
       await tx.run(`
-        MATCH (o:OrthancServer {serviceId: $serviceId}) 
+        MATCH (o:OrthancServer {uuid: $uuid}) 
         SET o.orthancName = $orthancName,
         o.aet = $aet,  
         o.hostNameSwarm = $hostNameSwarm, 
@@ -285,23 +454,43 @@ class OrthancService {
         `,
         reqBody
       )
-      // Change the relationship between the Orthanc server and the Swarm node.
-      if (reqBody.hostNameSwarm !== nodeProperties.hostNameSwarm) {
-        await tx.run(`
-          MATCH (o:OrthancServer {serviceId: $serviceId})-[r:RUNNING]->(old_host:SwarmNode {name: $oldHostNameSwarm})
-          DELETE r
-          WITH o
-          MATCH (new_host:SwarmNode {name: $newHostNameSwarm})
-          CREATE (o)-[:RUNNING]->(new_host)`,
-          {
-            serviceId: reqBody.serviceId,
-            oldHostNameSwarm: nodeProperties.hostNameSwarm,
-            newHostNameSwarm: reqBody.hostNameSwarm
-          }
-        )
-      }
+    
     })
     await session.close();
+  }
+
+  async addTag(reqBody) {
+    let session = this.neo4jDriver.driver.session();
+    await session.executeWrite( async (tx) => {
+      const tagResult = await tx.run(`
+        MATCH (node {uuid:$uuid}) 
+        MERGE (tag:Tag {name: $tagName}) 
+        MERGE (tag)-[:TAG]->(node) 
+        SET tag.color = $color 
+        RETURN node`,
+        reqBody
+      )
+      if (tagResult.records.length === 0) {
+        throw new Error(`No node found with uuid ${reqBody.uuid}`);
+      }
+    })
+  }
+
+  async untagNode(reqBody) {
+    let session = this.neo4jDriver.driver.session();
+    await session.executeWrite( async (tx) => {
+      const tagResult = await tx.run(`
+        MATCH (node {uuid:$uuid}) 
+        MATCH (tag:Tag {name: $tagName}) 
+        MATCH (tag)-[r:TAG]->(node) 
+        DELETE r 
+        RETURN node`,
+        reqBody
+      )
+      if (tagResult.records.length === 0) {
+        throw new Error(`No node found with uuid ${reqBody.uuid}`);
+      }
+    })
   }
 
 }
