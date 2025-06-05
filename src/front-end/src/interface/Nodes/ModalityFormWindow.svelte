@@ -1,5 +1,6 @@
 <script lang="ts">
-    import CenteredWindow from "./CenteredWindow.svelte";
+    import ButtonForm from "../Components/ButtonForm.svelte";
+import CenteredWindow from "../Components/CenteredWindow.svelte";
 
     export let modalityValue: DICOMModality;
     export let submit;
@@ -34,8 +35,7 @@
                 <label for="description" class="form-label fs-5">Description:</label>
                 <textarea bind:value={modalityValue.description} class="form-control rounded-3" id="description" maxlength="200" rows="4" required></textarea>
             </div>
-            
-            <button class="w-100 mb-2 btn btn-lg rounded-3 btn-primary" style="background-color: #1c398e;" type="submit">{submitText}</button>
+            <ButtonForm text={submitText}/>
         </form>	
     </div>
 </CenteredWindow>

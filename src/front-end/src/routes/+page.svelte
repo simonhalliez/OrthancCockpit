@@ -1,13 +1,13 @@
 <script lang="ts">
-	import Graph from '../components/Graph.svelte';
-	import ButtonHeader from '../components/ButtonHeader.svelte';
+	import Graph from '../interface/Components/Graph.svelte';
+	import ButtonHeader from '../interface/Components/ButtonHeader.svelte';
 	import { goto } from "$app/navigation";
 	import { network } from '../store/network';
 	import axios from 'axios';
 	import { env } from "$env/dynamic/public";
-    import ServerFromWindow from '../components/ServerFormWindow.svelte';
-	import EdgesFormWindow from '../components/EdgesFormWindow.svelte';
-	import ModalityFormWindow from '../components/ModalityFormWindow.svelte';
+    import ServerFromWindow from '../interface/Nodes/ServerFormWindow.svelte';
+	import EdgesFormWindow from '../interface/Edges/EdgesFormWindow.svelte';
+	import ModalityFormWindow from '../interface/Nodes/ModalityFormWindow.svelte';
 
 	const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
 	let showAddServer = false;

@@ -1,5 +1,6 @@
 <script lang="ts">
-    import CenteredWindow from "./CenteredWindow.svelte";
+    import ButtonForm from "../Components/ButtonForm.svelte";
+    import CenteredWindow from "../Components/CenteredWindow.svelte";
 
     export let serverValues:OrthancServer ;
     export let submit;
@@ -56,8 +57,7 @@
                     </div>
                 </div>
             </div>
-            
-            <button class="w-100 mb-2 btn btn-lg rounded-3 btn-primary" style="background-color: #1c398e;" type="submit">{submitText}</button>
+            <ButtonForm text={submitText}/>
         </form>	
     </div>
 </CenteredWindow>

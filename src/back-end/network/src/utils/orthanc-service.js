@@ -1,11 +1,11 @@
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const log = require('debug')('network-d');
 const { DockerService } = require('./docker-service');
 const { setTimeout } = require('timers/promises');
 const { v4: uuidv4 } = require('uuid');
 const { DicomService } = require('./dicom-service');
+const { encrypt, decrypt } = require('./crypto');
 
 
 class OrthancService {
@@ -46,6 +46,18 @@ class OrthancService {
       };
       modalitiesConfig[modality.get('modalityId')] = payLoad;
     }
+    // Retrieve all the user of the Orthanc server.
+    let users = await tx.run(`
+      MATCH (edit_server:OrthancServer{uuid:$uuid})-[:HAS_USER]->(user:User)
+      RETURN DISTINCT user.username AS username, user.password AS password`,
+      serverInfo
+    )
+    let usersConfig = {};
+    for (let i = 0; i < users.records.length; i++) {
+      let user = users.records[i];
+      usersConfig[user.get('username')] = decrypt(user.get('password'), process.env.ADMIN_PASSWORD);
+    }
+    // Create the configuration object for Orthanc server.
     let config = {
       "Name": serverInfo.orthancName,
       "DicomAet": serverInfo.aet,
@@ -57,7 +69,7 @@ class OrthancService {
       "DicomAlwaysAllowStore" : false,
       "DicomTlsEnabled" : false,
       "RegisteredUsers" : {
-          "admin" : process.env.ADMIN_PASSWORD
+          "admin" : process.env.ADMIN_PASSWORD, ...usersConfig
       },
       "StorageDirectory": "/var/lib/orthanc/db/",
       "DicomModalities" : modalitiesConfig
@@ -144,12 +156,24 @@ class OrthancService {
       // Create the relationship between the Orthanc server and the Swarm node.
       await tx.run(`
         MATCH (n:SwarmNode {name: $name})
-        MATCH (o:OrthancServer {serviceId: $serviceId})
+        MATCH (o:OrthancServer {uuid: $uuid})
         MERGE (o)-[:RUNNING]->(n)
         `,
         {
           name: reqBody.hostNameSwarm,
-          serviceId: res.serviceId
+          uuid: reqBody.uuid
+        }
+      )
+      await tx.run(`
+        MATCH (o:OrthancServer {uuid: $uuid})
+        MERGE (u:User {username: "admin"})
+        SET u.password = $password
+        MERGE (o)-[link:HAS_USER]->(u) 
+        SET link.state = "pending"
+        `,
+        {
+          password: encrypt(process.env.ADMIN_PASSWORD, process.env.ADMIN_PASSWORD),
+          uuid: reqBody.uuid
         }
       )
     })
@@ -474,6 +498,7 @@ class OrthancService {
         throw new Error(`No node found with uuid ${reqBody.uuid}`);
       }
     })
+    await session.close();
   }
 
   async untagNode(reqBody) {
@@ -491,8 +516,40 @@ class OrthancService {
         throw new Error(`No node found with uuid ${reqBody.uuid}`);
       }
     })
+    await session.close();
   }
 
+  async addUser(reqBody) {
+    let userResult;
+    // Encrypt the password before storing it in the database.
+    reqBody.password = encrypt(reqBody.password, process.env.ADMIN_PASSWORD);
+    log(reqBody);
+    userResult = await this.neo4jDriver.driver.executeQuery(`
+      MATCH (o:OrthancServer {uuid: $uuid})
+      MERGE (u:User {username: $username})
+      SET u.password = $password
+      MERGE (o)-[link:HAS_USER]->(u)
+      SET link.state = $state
+      RETURN o`, reqBody);
+    
+    if (userResult.records.length === 0) {
+      throw new Error(`No node found with uuid ${reqBody.uuid}`);
+    }
+    await this.editServer(userResult.records[0].get('o').properties);
+  }
+
+  async removeUser(reqBody) {
+    let userResult;
+    userResult = await this.neo4jDriver.driver.executeQuery(`
+      MATCH (o:OrthancServer {uuid: $uuid})-[r:HAS_USER]->(u:User {username: $username})
+      DELETE r
+      RETURN o`, reqBody);
+    
+    if (userResult.records.length === 0) {
+      throw new Error(`No node found with uuid ${reqBody.uuid}`);
+    }
+    await this.editServer(userResult.records[0].get('o').properties);
+  }
 }
 
 module.exports = { OrthancService };

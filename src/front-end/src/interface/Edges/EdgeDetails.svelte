@@ -1,8 +1,8 @@
 <script lang="ts">
-    import Details from "./Details.svelte";
+    import Details from "../Components/Details.svelte";
     import AllowedRequest from "./AllowedRequest.svelte";
-    import ButtonDetails from "./ButtonDetails.svelte";
-    import { network } from '../store/network';
+    import ButtonDetails from "../Components/ButtonDetails.svelte";
+    import { network } from '../../store/network';
     import { env } from "$env/dynamic/public";
     import EdgesFormWindow from "./EdgesFormWindow.svelte";
     import axios from 'axios';

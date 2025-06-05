@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { selectedTags } from '../store/selectedTags';
+    import { selectedTags } from '../../store/selectedTags';
+    import { network } from '../../store/network';
     import TagBadge from './TagBadge.svelte';
     import TagFormWindow from './TagFormWindow.svelte';
 
@@ -37,7 +38,7 @@
             />
         {/each}
         <span class="badge badge-pill bg-blue-900" style="color: white;">
-            <button aria-label="Filter mode" on:click={() => {isIntersectMode = !isIntersectMode; selectedTags.update((tags) => {return tags;})}}>
+            <button aria-label="Filter mode" on:click={() => {isIntersectMode = !isIntersectMode; selectedTags.update((tags) => {return tags;}); network.updateNetwork();}}>
                 {#if isIntersectMode}
                     <i class="bi bi-intersect"></i>
                 {:else}

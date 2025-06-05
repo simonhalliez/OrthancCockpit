@@ -18,6 +18,7 @@ case "$1" in
         # docker pull neo4j:2025.02.0-bullseye
         docker build -t network-service ./back-end/network/
         # docker build -t front-end ./front-end/
+        docker volume rm orthancCockpit_network-db-data
         docker stack deploy -c orthancCockpit.yml orthancCockpit
 
 

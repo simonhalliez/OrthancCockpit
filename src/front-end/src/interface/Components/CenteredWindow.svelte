@@ -1,6 +1,7 @@
 <script lang="ts">
 	export let showModal: boolean;
     export let header: string;
+    export let width: number = 400;
 </script>
 
 <style>
@@ -17,18 +18,12 @@
         justify-content: center;
     }
 
-    .modal-dialog {
-        max-width: 400px;
-        width: 100%;
-        z-index: 60; /* Ensure it is above the backdrop */
-    }
-
 </style>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 {#if showModal}
 	<div class="modal-backdrop" role="dialog" tabindex="0" on:close={() => (showModal = false)} on:click|self={() => showModal=false}>
-		<div class="modal-dialog" role="document">
+		<div style="max-width: {width}px; width: 100%; z-index: 60;" role="document">
             <div class="modal-content rounded-4 shadow bg-white">
                 <div class="modal-header justify-content-between p-3 pb-4 border-bottom-0">
                     <h1 class="fw-bold mb-0 fs-2 text-decoration-underline">{header}</h1>

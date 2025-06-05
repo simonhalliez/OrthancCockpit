@@ -70,9 +70,7 @@ class DicomService {
       }
       if (!isServerUp) {
         // Optional: wait before retrying to avoid spamming
-        log("Start wait ")
         await new Promise(resolve => setTimeout(resolve, 1000));
-        log("End wait ")
       }
     }
   }
@@ -92,7 +90,6 @@ class DicomService {
     } catch (err) {
       throw new Error("Fail to recover instances for transfert: " + err.message);
     }
-    log(instanceIds);
 
     // Send all to the target Orthanc via modality
     try {
@@ -118,7 +115,6 @@ class DicomService {
     } catch(err) {
       throw new Error(`Fail to transfert instances (http://${sourceIp}:${sourcePort}/modalities/${targetUuid}/store): ${err.message}`);
     }
-    log("Transfert done");
   }
 
   static async deleteConnectedOrthancServer(nodeProperties, tx) {
@@ -278,7 +274,7 @@ class DicomService {
           // Perform the DICOM echo request
           await axios.post(
             `http://${relation.get('h_from').properties.ip}:${relation.get('n_from').properties.publishedPortWeb}/modalities/${relation.get('n_to').properties.uuid}/echo`,
-            { "CheckFind": false, "Timeout": 0 },
+            { "CheckFind": false, "Timeout": 3 },
             {
               auth: {
                 username: 'admin',

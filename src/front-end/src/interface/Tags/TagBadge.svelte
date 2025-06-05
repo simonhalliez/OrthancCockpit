@@ -2,8 +2,8 @@
     import { createEventDispatcher } from "svelte";
     import { env } from "$env/dynamic/public";
     import axios from "axios";
-    import { selectedTags } from "../store/selectedTags";
-    import { network } from "../store/network";
+    import { selectedTags } from "../../store/selectedTags";
+    import { network } from "../../store/network";
 
     export let tag: Tag = {name: "", color: ""};
     export let node: DicomNode | null = null;
@@ -31,7 +31,7 @@
             //     alert(error);
             // });
             selectedTags.removeTag(tag);
-
+            network.updateNetwork();
         }
     }
 

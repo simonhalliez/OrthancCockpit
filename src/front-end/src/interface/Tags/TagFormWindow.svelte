@@ -1,10 +1,11 @@
 <script lang="ts">
-    import CenteredWindow from "./CenteredWindow.svelte";
+    import CenteredWindow from "../Components/CenteredWindow.svelte";
     import { env } from "$env/dynamic/public";
     import axios from "axios";
-    import { tags } from '../store/tags';
-    import { selectedTags } from "../store/selectedTags";
-    import { network } from "../store/network";
+    import { tags } from '../../store/tags';
+    import { selectedTags } from "../../store/selectedTags";
+    import { network } from "../../store/network";
+    import ButtonForm from "../Components/ButtonForm.svelte";
 
     export let showTagForm: boolean = false;
     export let node: DicomNode | null = null;
@@ -33,8 +34,7 @@
     }    
     
     function submit() {
-        // Validation: Ensure only one of the two options is chosen
-        
+        // Edit a existing tag.
         if (tag) {
             axios.post(`http://${ipManager}:3002/edit_tag`,
                 {tagName: tag.name, newName: submitTags.name, newColor: submitTags.color})
@@ -45,6 +45,7 @@
                 }).catch((error: unknown) => {
                     alert(error);
                 });
+        // Add a tag to a node and create it if it doesn't exist.
         } else if (node) {
             if (!selectedTag.name && !submitTags.name ) {
                 alert("Please select an existing tag or create a new tag before adding a tag.");
@@ -58,19 +59,19 @@
             axios.post(`http://${ipManager}:3002/tag_node`,
                 {uuid: node.uuid, tagName: selectedTag.name || submitTags.name, color: selectedTag.color || submitTags.color})
                 .then(() => {
-                    if (node) {
-                        node.tags = [...node.tags, {name: selectedTag.name || submitTags.name, color: selectedTag.color || submitTags.color}];
-                    }
                     submitTags = {name: "", color: ""};
                     selectedTag = {name: "", color: ""};
                     tags.updateTags();
+                    network.updateNetwork();
+                    
                 }).catch((error: unknown) => {
                     alert(error);
                 });
+        // Add a tag to the selected tags.        
         } else {
             selectedTags.addTag(selectedTag);
+            network.updateNetwork();
         }
-            
         // Close the modal after submission
         showTagForm = false;
         
@@ -109,7 +110,7 @@
                     </div>
                 </div>    
             {/if}
-            <button class="w-100 mb-2 btn btn-lg rounded-3 btn-primary" style="background-color: #1c398e;" type="submit">{submitButtonText}</button>
+            <ButtonForm text={submitButtonText}/>
         </form>
     </div>
     

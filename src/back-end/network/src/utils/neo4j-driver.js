@@ -35,13 +35,16 @@ class Neo4jDriver {
       const resultOrthancServer = await tx.run(`
         MATCH (n: OrthancServer)-[r:RUNNING]->(s:SwarmNode)
         OPTIONAL MATCH (tag)-[:TAG]->(n) 
-        RETURN n, s, COLLECT(tag {.*}) AS tags`
+        OPTIONAL MATCH (n)-[connection:HAS_USER]->(u:User)
+        RETURN n, s, COLLECT(tag {.*}) AS tags, 
+        COLLECT(u {.*, state: connection.state}) AS users`
       )
       network.nodes = resultOrthancServer.records.map(record => ({
         ...record.get('n').properties,
         ip: record.get('s').properties.ip,
         uuid: record.get('n').properties.uuid,
-        tags: record.get('tags')
+        tags: record.get('tags'),
+        users: record.get('users')
       }));
 
       const resultModalities = await tx.run(`
@@ -63,12 +66,12 @@ class Neo4jDriver {
       network.edges = resultEdge.records.map(record => {
         const edgeProperties = record.get('r').properties;
         return {
-        from: record.get('n').properties.aet,
-        to: record.get('m').properties.aet,
-        uuidFrom: record.get('n').properties.uuid,
-        uuidTo: record.get('m').properties.uuid,
-        id: record.get('r').elementId,
-        ...edgeProperties
+          from: record.get('n').properties.aet,
+          to: record.get('m').properties.aet,
+          uuidFrom: record.get('n').properties.uuid,
+          uuidTo: record.get('m').properties.uuid,
+          id: record.get('r').elementId,
+          ...edgeProperties
         };
       });
 

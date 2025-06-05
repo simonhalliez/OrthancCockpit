@@ -1,14 +1,14 @@
 <script lang="ts">
     import vis from 'vis';
     import { onMount, onDestroy } from 'svelte';
-    import { network } from '../store/network';
-    import { selectedTags } from '../store/selectedTags';
-    import { tags } from '../store/tags';
+    import { network } from '../../store/network';
+    import { selectedTags } from '../../store/selectedTags';
+    import { tags } from '../../store/tags';
     import axios from 'axios';
     import { env } from "$env/dynamic/public";
-    import NodeDetails from './NodeDetails.svelte';
-    import EdgeDetails from './EdgeDetails.svelte';
-    import TagSelector from './TagSelector.svelte';
+    import NodeDetails from '../Nodes/NodeDetails.svelte';
+    import EdgeDetails from '../Edges/EdgeDetails.svelte';
+    import TagSelector from '../Tags/TagSelector.svelte';
 
     
     const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
@@ -40,7 +40,6 @@
 
     selectedTags.subscribe((value: Tag[]) => {
         tagSelected = value;
-        
     });
 
     function generateVisNodesData() {

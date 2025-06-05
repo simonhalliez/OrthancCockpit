@@ -15,6 +15,7 @@ interface OrthancServer extends BaseNode {
     publishedPortWeb: string;
     targetPortWeb: string;
     targetPortDicom: string;
+    users: OrthancUser[];
 }
 
 interface DICOMModality extends BaseNode {
@@ -45,4 +46,10 @@ type Network = {
 type Tag = {
     name: string;
     color: string;
+}
+
+type OrthancUser = {
+    username: string;
+    state: string;
+    password: string;
 }

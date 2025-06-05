@@ -14,7 +14,8 @@ services:
       restart_policy:
         condition: on-failure
     networks: [ "dicom-net" ]
-
+    volumes:
+      - network-db-data:/data
 
 
   network-manager:
@@ -54,3 +55,6 @@ networks:
   dicom-net:
     driver: bridge
     external: true
+volumes:
+  network-db-data:
+    driver: local

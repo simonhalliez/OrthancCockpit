@@ -5,6 +5,7 @@ const { SwarmService } = require('./utils/swarm-service');
 const { OrthancService } = require('./utils/orthanc-service');
 const { DicomService } = require('./utils/dicom-service');
 const { ModalityService } = require('./utils/modality-service');
+const { UserService } = require('./utils/user-service');
 
 const app = express.Router();
 const DB_IP = process.env.PUBLIC_IP_DB || 'localhost';
@@ -16,6 +17,7 @@ const swarmService = new SwarmService(neo4jDriver);
 const modalityService = new ModalityService(neo4jDriver);
 const dicomService = new DicomService(neo4jDriver);
 const orthancService = new OrthancService(neo4jDriver, dicomService);
+const userService = new UserService(neo4jDriver, orthancService);
 swarmService.addInitialSwarmNodes();
 swarmService.updateSwarmNodes();
 
@@ -106,6 +108,7 @@ app.get('/update_status', async (req, res) => {
     await orthancService.updateServerStatus();
     await dicomService.testDicomConnections()
     await modalityService.updateModalitiesStatus();
+    await userService.updateUserState();
     return res.status(200).json({
       status: 'ok'
     });
@@ -240,4 +243,35 @@ app.post('/edit_tag', (req, res) => {
     });
   });
 })
+
+app.post('/delete_user', (req, res) => {
+  return userService.removeUser(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when deleting user: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete user',
+      error: err.message
+    });
+  });
+})
+
+app.post('/add_user', (req, res) => {
+  return userService.addUser(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when adding user: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to add user',
+      error: err.message
+    });
+  });
+})
+
 module.exports = app;

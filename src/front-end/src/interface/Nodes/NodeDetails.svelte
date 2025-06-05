@@ -1,13 +1,14 @@
 <script lang="ts">
-    import ButtonDetails from "./ButtonDetails.svelte";
-    import Details from "./Details.svelte";
+    import ButtonDetails from "../Components/ButtonDetails.svelte";
+    import Details from "../Components/Details.svelte";
     import ModalityFormWindow from "./ModalityFormWindow.svelte";
     import ServerFromWindow from "./ServerFormWindow.svelte";
     import axios from "axios";
-    import { network } from '../store/network';
+    import { network } from '../../store/network';
     import { env } from "$env/dynamic/public";
-    import TagFormWindow from "./TagFormWindow.svelte";
-    import TagBadge from "./TagBadge.svelte";
+    import TagFormWindow from "../Tags/TagFormWindow.svelte";
+    import TagBadge from "../Tags/TagBadge.svelte";
+    import UserDetails from "../Users/UserDetails.svelte";
 
     export let node: DicomNode;
     export let showNodeDetails: boolean = false;
@@ -16,6 +17,7 @@
     let showServerEdit = false;
     let showModalityEdit = false;
     let showAddTag = false;
+    let showUserDetails = false;
 
     function editServer() {
         if (node) {
@@ -72,6 +74,12 @@
             <i class="bi bi-circle-fill text-danger text-left"></i>
         {/if}
         <p class="text-center text-decoration-underline fw-bold">Node details</p>
+        {#if 'orthancName' in node}
+            <button type="button" aria-label="Show user details" on:click={() => { showUserDetails = true; }}>
+                <i class="bi bi-person-square"></i>
+            </button>
+            <UserDetails bind:showUserDetails={showUserDetails} node={node} />
+        {/if}
     </div>
     
     <div class="fs-5">
