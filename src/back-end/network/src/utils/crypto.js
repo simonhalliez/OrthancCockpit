@@ -19,7 +19,12 @@ function decrypt(encrypted, secret) {
   return decrypted;
 }
 
+function createUserId(username, password, secret) {
+  return crypto.createHash('sha256').update(username + password + secret).digest('hex');
+}
+
 module.exports = {
   encrypt,
-  decrypt
+  decrypt,
+  createUserId
 };

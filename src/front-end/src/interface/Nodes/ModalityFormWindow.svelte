@@ -1,6 +1,6 @@
 <script lang="ts">
     import ButtonForm from "../Components/ButtonForm.svelte";
-import CenteredWindow from "../Components/CenteredWindow.svelte";
+    import CenteredWindow from "../Components/CenteredWindow.svelte";
 
     export let modalityValue: DICOMModality;
     export let submit;
@@ -11,7 +11,7 @@ import CenteredWindow from "../Components/CenteredWindow.svelte";
     let submitText = "Add modality";
     if (editMode) {
         centeredWindowHeader = "Edit DICOM modality";
-        submitText = "Apply changes to DICOM modality";
+        submitText = "Changes in database and Orthanc neighbors";
     }
     
 </script>

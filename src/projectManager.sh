@@ -61,8 +61,8 @@ case "$1" in
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_modality \
             -H "Content-Type: application/json" \
             -d '{
-                "aet": "CT_CARDIO_105",
-                "ip": "192.168.129.93",
+                "aet": "CT_CARDIO_104",
+                "ip": "192.168.1.11",
                 "publishedPortDicom": "4242",
                 "description": "Room: a.105\nModel: NAEOTOM Alpha class\nCT-scan of the cardiology service. \nPseudo: admin\nPassword: serf34$QDfse\nLast review: 23/05/2025",
                 "status": "pending",
@@ -71,25 +71,26 @@ case "$1" in
                 "uuid": "",
                 "tags": []
             }'
+        curl -X GET http://${PUBLIC_IP_MANAGER}:3002/update_status
+        # curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+        #     -H "Content-Type: application/json" \
+        #     -d '{
+        #         "from": "CT_CARDIO_104",
+        #         "to": "CARDIOLOGY_4",
+        #         "status": false,
+        #         "allowEcho": true,
+        #         "allowFind": false,
+        #         "allowGet": false,
+        #         "allowMove": false,
+        #         "allowStore": false,
+        #         "id": "",
+        #         "uuidFrom": "",
+        #         "uuidTo": ""
+        #     }'
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
             -H "Content-Type: application/json" \
             -d '{
-                "from": "CT_CARDIO_105",
-                "to": "CARDIOLOGY_4",
-                "status": false,
-                "allowEcho": true,
-                "allowFind": false,
-                "allowGet": false,
-                "allowMove": false,
-                "allowStore": false,
-                "id": "",
-                "uuidFrom": "",
-                "uuidTo": ""
-            }'
-        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
-            -H "Content-Type: application/json" \
-            -d '{
-                "from": "CT_CARDIO_105",
+                "from": "CT_CARDIO_104",
                 "to": "CARDIOLOGY_3",
                 "status": false,
                 "allowEcho": true,
@@ -105,7 +106,7 @@ case "$1" in
             -H "Content-Type: application/json" \
             -d '{
                 "from": "CARDIOLOGY_4",
-                "to": "CT_CARDIO_105",
+                "to": "CT_CARDIO_104",
                 "status": false,
                 "allowEcho": true,
                 "allowFind": false,
@@ -116,36 +117,65 @@ case "$1" in
                 "uuidFrom": "",
                 "uuidTo": ""
             }'
+        # curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+        #     -H "Content-Type: application/json" \
+        #     -d '{
+        #         "from": "CARDIOLOGY_3",
+        #         "to": "CARDIOLOGY_4",
+        #         "status": false,
+        #         "allowEcho": true,
+        #         "allowFind": false,
+        #         "allowGet": false,
+        #         "allowMove": false,
+        #         "allowStore": false,
+        #         "id": "",
+        #         "uuidFrom": "",
+        #         "uuidTo": ""
+        #     }'
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
-            -H "Content-Type: application/json" \
-            -d '{
-                "from": "CARDIOLOGY_3",
-                "to": "CARDIOLOGY_4",
-                "status": false,
-                "allowEcho": true,
-                "allowFind": false,
-                "allowGet": false,
-                "allowMove": false,
-                "allowStore": false,
-                "id": "",
-                "uuidFrom": "",
-                "uuidTo": ""
-            }'
-            curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
-            -H "Content-Type: application/json" \
-            -d '{
-                "from": "CARDIOLOGY_4",
-                "to": "CARDIOLOGY_3",
-                "status": false,
-                "allowEcho": true,
-                "allowFind": false,
-                "allowGet": false,
-                "allowMove": false,
-                "allowStore": false,
-                "id": "",
-                "uuidFrom": "",
-                "uuidTo": ""
-            }'
+        -H "Content-Type: application/json" \
+        -d '{
+            "from": "CARDIOLOGY_4",
+            "to": "CARDIOLOGY_3",
+            "status": false,
+            "allowEcho": true,
+            "allowFind": false,
+            "allowGet": false,
+            "allowMove": false,
+            "allowStore": false,
+            "id": "",
+            "uuidFrom": "",
+            "uuidTo": ""
+        }'
+
+        curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_remote_server \
+        -H "Content-Type: application/json" \
+        -d '{
+            
+            "username": "admin",
+            "password": "password",
+            "state": "pending",
+            "ip": "192.168.1.11",
+            "publishedPortWeb": "8042",
+            "publishedPortDicom": "4242"
+        }'
+        # curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
+        #     -H "Content-Type: application/json" \
+        #     -d '{
+        #         "from": "CT_CARDIO_105",
+        #         "to": "CARDIOLOGY_4",
+        #         "status": false,
+        #         "allowEcho": true,
+        #         "allowFind": false,
+        #         "allowGet": false,
+        #         "allowMove": false,
+        #         "allowStore": false,
+        #         "id": "",
+        #         "uuidFrom": "",
+        #         "uuidTo": ""
+        #     }'
+
+        
     ;;
     "leave")
         docker swarm leave --force

@@ -6,6 +6,7 @@ const { OrthancService } = require('./utils/orthanc-service');
 const { DicomService } = require('./utils/dicom-service');
 const { ModalityService } = require('./utils/modality-service');
 const { UserService } = require('./utils/user-service');
+const { encrypt } = require('./utils/crypto');
 
 const app = express.Router();
 const DB_IP = process.env.PUBLIC_IP_DB || 'localhost';
@@ -104,23 +105,13 @@ app.post('/update_node_position', (req, res) => {
 });
 
 app.get('/update_status', async (req, res) => {
-  try {
-    await orthancService.updateServerStatus();
-    await dicomService.testDicomConnections()
-    await modalityService.updateModalitiesStatus();
     await userService.updateUserState();
+    await orthancService.updateServerStatus();
+    await dicomService.testDicomConnections();
+    await modalityService.updateModalitiesStatus();
     return res.status(200).json({
       status: 'ok'
     });
-  }
-  catch (err) {
-    log("Error when updating status: ", err);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Failed to update status',
-      error: err.message
-    });
-  }
 });
 
 app.post('/delete_node', (req, res) => {
@@ -269,6 +260,21 @@ app.post('/add_user', (req, res) => {
     return res.status(500).json({
       status: 'error',
       message: 'Failed to add user',
+      error: err.message
+    });
+  });
+})
+
+app.post('/add_remote_server', (req, res) => {
+  return orthancService.addRemoteServer(req.body).then(() => {
+    return res.status(200).json({
+      status: 'ok'
+    });
+  }).catch((err) => {
+    log("Error when adding remote server: ", err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to add remote server: ',
       error: err.message
     });
   });

@@ -2,7 +2,7 @@
     import ButtonDetails from "../Components/ButtonDetails.svelte";
     import Details from "../Components/Details.svelte";
     import ModalityFormWindow from "./ModalityFormWindow.svelte";
-    import ServerFromWindow from "./ServerFormWindow.svelte";
+    import ServerFormWindow from "./ServerFormWindow.svelte";
     import axios from "axios";
     import { network } from '../../store/network';
     import { env } from "$env/dynamic/public";
@@ -18,7 +18,7 @@
     let showModalityEdit = false;
     let showAddTag = false;
     let showUserDetails = false;
-
+    
     function editServer() {
         if (node) {
             node.status = "pending";
@@ -65,7 +65,7 @@
 <Details bind:showDetails={showNodeDetails}>
     
     
-    <div class="d-flex fs-4 gap-4">
+    <div class="d-flex fs-4 gap-4 ">
         {#if node.status === 'up'}
             <i class="bi bi-circle-fill text-success text-left"></i>
         {:else if node.status === 'pending'}
@@ -73,7 +73,14 @@
         {:else}
             <i class="bi bi-circle-fill text-danger text-left"></i>
         {/if}
-        <p class="text-center text-decoration-underline fw-bold">Node details</p>
+        {#if 'hostNameSwarm' in node}
+            <p class="text-center text-decoration-underline fw-bold">Orthanc server</p>
+        {:else if 'orthancName' in node}
+            <p class="text-center text-decoration-underline fw-bold">Remote Orthanc server</p>
+        {:else}
+            <p class="text-center text-decoration-underline fw-bold">Modality details</p>
+        {/if}
+        
         {#if 'orthancName' in node}
             <button type="button" aria-label="Show user details" on:click={() => { showUserDetails = true; }}>
                 <i class="bi bi-person-square"></i>
@@ -96,7 +103,7 @@
             <p class="fw-bold">AET:</p>
             <p>{node.aet}</p>
         </div>
-        {#if 'orthancName' in node}
+        {#if 'orthancName' in node && node.hostNameSwarm !== undefined }
             <p class="fw-bold">Swarm node:</p>
             <p>{node.hostNameSwarm}</p>
         {/if}
@@ -137,7 +144,12 @@
         <ButtonDetails text="Delete" onClick={deleteNode}/>
         {#if 'orthancName' in node}
             <ButtonDetails text="Edit it" onClick={() => {showServerEdit=true}}/>
-            <ServerFromWindow bind:showServerForm={showServerEdit} serverValues={node} submit={editServer} editMode={true}/>
+            {#if 'hostNameSwarm' in node}
+                <ServerFormWindow bind:showServerForm={showServerEdit} serverValues={node} submit={editServer} editMode={true} isCreateMode={true}/>
+            {:else}
+                <ServerFormWindow bind:showServerForm={showServerEdit} serverValues={node} submit={editServer} editMode={true} isCreateMode={false}/>
+            {/if}
+            
         {:else}
             <ButtonDetails text="Edit it" onClick={() => {showModalityEdit=true}}/>
             <ModalityFormWindow bind:showServerForm={showModalityEdit} modalityValue={node} submit={editModality} editMode={true}/>

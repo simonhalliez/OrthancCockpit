@@ -27,13 +27,14 @@
 		visY: 0.0,
 		status: 'pending',
 		uuid: '',
-		tags: []
+		tags: [],
+		users: [],
 	};
 
 	const initialAddLinkValues:Edge = {
 		from: '',
 		to: '',
-		status: false,
+		status: 'pending',
 		allowEcho: true,
 		allowFind: false,
 		allowGet: false,

@@ -1,5 +1,6 @@
 const neo4j = require('neo4j-driver');
 const log = require('debug')('network-d');
+const { decrypt } = require('./crypto');
 
 class Neo4jDriver {
   constructor(DB_IP, PASSWORD) {
@@ -33,7 +34,7 @@ class Neo4jDriver {
     let session = this.driver.session();
     await session.executeRead( async (tx) => {
       const resultOrthancServer = await tx.run(`
-        MATCH (n: OrthancServer)-[r:RUNNING]->(s:SwarmNode)
+        MATCH (n: OrthancServer)-[r:RUNNING]->(s)
         OPTIONAL MATCH (tag)-[:TAG]->(n) 
         OPTIONAL MATCH (n)-[connection:HAS_USER]->(u:User)
         RETURN n, s, COLLECT(tag {.*}) AS tags, 
@@ -44,7 +45,12 @@ class Neo4jDriver {
         ip: record.get('s').properties.ip,
         uuid: record.get('n').properties.uuid,
         tags: record.get('tags'),
-        users: record.get('users')
+        users: record.get('users').map(user => ({
+          ...user,
+          password: user.password
+            ? decrypt(user.password, process.env.ADMIN_PASSWORD)
+            : undefined
+        }))
       }));
 
       const resultModalities = await tx.run(`
@@ -98,29 +104,26 @@ class Neo4jDriver {
     )
   }
 
-  static async recoverOrthancServerIp(serviceId, tx) {
+  static async recoverOrthancServerIp(uuid, tx) {
     let hostResult = await tx.run(`
-      MATCH (:OrthancServer {serviceId: $serviceId})-[:RUNNING]->(host:SwarmNode) 
+      MATCH (:OrthancServer {uuid : $uuid})-[:RUNNING]->(host) 
       RETURN host
       `,
-      {serviceId}
+      {uuid}
     );
     if (hostResult.records.length === 0) {
-      throw new Error(`No host found in the database for ${serverId}`);
+      throw new Error(`No host found in the database for ${uuid}`);
     }
     return hostResult.records[0].get('host').properties.ip;
   }
 
   static async recoverNodeIp(nodeElement, tx) {
     if (nodeElement.labels.includes("OrthancServer")) {
-      return await this.recoverOrthancServerIp(nodeElement.properties.serviceId, tx);
+      return await this.recoverOrthancServerIp(nodeElement.properties.uuid, tx);
     } else {
       return nodeElement.properties.ip;
     }
   }
-
-
-
 }
 
 module.exports = { Neo4jDriver };

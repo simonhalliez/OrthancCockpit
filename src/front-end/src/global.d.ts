@@ -29,7 +29,7 @@ type Edge = {
     uuidFrom: string;
     uuidTo: string;
     to: string;
-    status: boolean;
+    status: string;
     id: string;
     allowEcho: boolean;
     allowFind: boolean;
@@ -52,4 +52,5 @@ type OrthancUser = {
     username: string;
     state: string;
     password: string;
+    userId: string;
 }

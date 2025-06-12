@@ -49,7 +49,10 @@
             let label;
             let color;
             if ("orthancName" in node){
-                label = `<b>${node.aet}</b> \nOrthanc name: ${node.orthancName} \nHost Name Swarm: ${node.hostNameSwarm}\n Port HTTP: ${node.publishedPortWeb}:${node.targetPortWeb} \n Port DICOM: ${node.publishedPortDicom}:${node.targetPortDicom}`;
+                label = `<b>${node.aet}</b> \nOrthanc name: ${node.orthancName}\n Port HTTP: ${node.publishedPortWeb}:${node.targetPortWeb} \n Port DICOM: ${node.publishedPortDicom}:${node.targetPortDicom}`;
+                if (node.hostNameSwarm !== undefined) {
+                    label += `\nHost Swarm: ${node.hostNameSwarm}`;
+                }
             } else {
                 label = `<b>${node.aet}</b> \nIp address: ${node.ip}\nPort DICOM: ${node.publishedPortDicom}`;
             }
@@ -76,9 +79,15 @@
 
     function generateVisEdgesData() {
         const edgeDataSet = networkData.edges.map(edge => {
-            let color = 'red';
-            if (edge.status) {
+            let color;
+            if (edge.status === "up") {
                 color = 'green';
+            } else if (edge.status === "pending") {
+                color = 'rgb(252, 219, 5)';
+            } else if (edge.status === "down") {
+                color = 'red';
+            } else {
+                color = 'grey';
             }
             return {
                 from: edge.uuidFrom,

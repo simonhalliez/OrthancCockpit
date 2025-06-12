@@ -13,7 +13,8 @@
     let userValues: OrthancUser = {
         username: "",
         state: "pending",
-        password: ""
+        password: "",
+        id: ""
     };
     let centeredWindowHeader = "Add a user to the Orthanc server " + orthancNode.orthancName;
     let submitText = "Add the user";

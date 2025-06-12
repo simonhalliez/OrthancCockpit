@@ -45,13 +45,13 @@ class ModalityService {
 
     async updateModalitiesStatus() {
         try {
-            let session =this.neo4jDriver.driver.session();
+            let session = this.neo4jDriver.driver.session();
             await session.executeWrite( async (tx) => {
                 // Update the modality node with the new properties in database
                 // Set status to 'up' where there is at least one active connection
                 await tx.run(`
                     MATCH (o:OrthancServer)-[c:CONNECTED_TO]->(m:Modality) 
-                    WHERE c.status = true 
+                    WHERE c.status = 'up'
                     SET m.status = 'up'
                     `
                 );
@@ -59,7 +59,7 @@ class ModalityService {
                 await tx.run(`
                     MATCH (m:Modality)
                     WHERE NOT EXISTS {
-                        MATCH (:OrthancServer)-[c:CONNECTED_TO {status: true}]->(m)
+                        MATCH (:OrthancServer)-[c:CONNECTED_TO {status: 'up'}]->(m)
                     }
                     SET m.status = 'pending'
                 `);

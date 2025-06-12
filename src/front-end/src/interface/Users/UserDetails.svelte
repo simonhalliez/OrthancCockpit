@@ -20,7 +20,7 @@
   function deleteUser(user: OrthancUser) {
     axios.post(`http://${ipManager}:3002/delete_user`, {
       uuid: node.uuid,
-      ...user
+      userId: user.userId
     }).then(() => {
       // Remove the user from the local list
       node.users = node.users.filter(u => u.username !== user.username);

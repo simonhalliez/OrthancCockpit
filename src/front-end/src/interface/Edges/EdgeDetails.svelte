@@ -15,7 +15,7 @@
     
     function editEdge() {
         if (edge) {
-            edge.status = false;
+            edge.status = "pending";
             axios.post(`http://${ipManager}:3002/add_edge`, edge)
 			.then( () => {
 				network.updateNetwork();
@@ -44,10 +44,15 @@
 <Details bind:showDetails={showEdgeDetails}>
 
     <div class="d-flex fs-3 gap-4">
-        {#if edge.status}
+
+        {#if edge.status === "up"}
             <i class="bi bi-circle-fill text-success text-left"></i>
-        {:else}
+        {:else if edge.status === "pending"}
+            <i class="bi bi-circle-fill text-left" style="color: rgb(252, 219, 5);"></i>
+        {:else if edge.status === "down"}
             <i class="bi bi-circle-fill text-danger text-left"></i>
+        {:else}
+            <i class="bi bi-circle-fill text-left" style="color: grey;"></i>
         {/if}
         <p class="text-center text-decoration-underline fw-bold">Link details</p>
     </div>
