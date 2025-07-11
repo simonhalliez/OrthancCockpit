@@ -3,7 +3,7 @@ import type { Writable } from "svelte/store";
 import axios from "axios";
 import { env } from "$env/dynamic/public";
 
-const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+const baseUrl = env.PUBLIC_BASE_URL || "http://localhost:3002";
 
 function createTags() {
     const { subscribe, set, update}: Writable<Tag[]> = writable<Tag[]>([]);
@@ -11,7 +11,7 @@ function createTags() {
     return {
         subscribe,
         updateTags: () => {
-            axios.get(`http://${ipManager}:3002/get_tags`)
+            axios.get(`${baseUrl}/nodes/tags`)
             .then((res) => {
                 set(res.data.data);
             })

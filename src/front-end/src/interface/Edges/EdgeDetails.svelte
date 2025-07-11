@@ -6,21 +6,23 @@
     import { env } from "$env/dynamic/public";
     import EdgesFormWindow from "./EdgesFormWindow.svelte";
     import axios from 'axios';
+    import { alertMessage, alertType } from '../../store/alert';
 
     export let edge: Edge;
     export let showEdgeDetails: boolean = false;
 
-    const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+    const baseUrl = env.PUBLIC_BASE_URL;
     let showLinkEdit = false;
     
     function editEdge() {
         if (edge) {
             edge.status = "pending";
-            axios.post(`http://${ipManager}:3002/add_edge`, edge)
+            axios.post(`${baseUrl}/edges`, edge)
 			.then( () => {
 				network.updateNetwork();
 			}) .catch((error: any) => {
-				alert(error);
+				alertType.set('danger');
+                alertMessage.set(error.response.data.message || 'An error occurred while editing the edge');
 			});
             showLinkEdit = false;
             showEdgeDetails = false;
@@ -29,11 +31,12 @@
 
     function deleteEdge() {
         if (edge) {
-            axios.post(`http://${ipManager}:3002/delete_edge`, edge)
+            axios.delete(`${baseUrl}/edges/${edge.id}`)
             .then(() => {
                 network.updateNetwork();
-            }).catch((error: unknown) => {
-                alert(error);
+            }).catch((error: any) => {
+                alertType.set('danger');
+				alertMessage.set(error.response.data.message || 'An error occurred while deleting the edge');
             });
             showEdgeDetails = false;
             

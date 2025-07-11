@@ -10,11 +10,10 @@ case "$1" in
     "init")
         docker swarm leave --force
         export PUBLIC_IP_MANAGER=${2}
-        export ADMIN_PASSWORD=${3}
-        docker swarm init --advertise-addr ${2}
+        export PORT_MANAGER=${3}
+        export ADMIN_PASSWORD=${4}
+        docker swarm init --advertise-addr $PUBLIC_IP_MANAGER
         docker network create --driver overlay --attachable dicom-net
-        echo -e "If you wish to use a worker; run the command above in your worker VM.\nPress any key when you are finished.\nIf not, just skip this step by pressing any key."
-        # read -n 1 -s
         # docker pull neo4j:2025.02.0-bullseye
         docker build -t network-service ./back-end/network/
         # docker build -t front-end ./front-end/
@@ -27,6 +26,7 @@ case "$1" in
         export PUBLIC_IP_MANAGER=${2}
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_Orthanc_server \
             -H "Content-Type: application/json" \
+            -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" \
             -d '{
                 "orthancName": "cardiology_3",
                 "aet": "CARDIOLOGY_3",
@@ -44,6 +44,7 @@ case "$1" in
             }'
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_Orthanc_server \
             -H "Content-Type: application/json" \
+            -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" \
             -d '{"orthancName": "cardiology_4",
                 "aet": "CARDIOLOGY_4",
                 "ip": "",
@@ -60,9 +61,10 @@ case "$1" in
             }'
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_modality \
             -H "Content-Type: application/json" \
+            -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" \
             -d '{
                 "aet": "CT_CARDIO_104",
-                "ip": "192.168.1.11",
+                "ip": "192.168.129.93",
                 "publishedPortDicom": "4242",
                 "description": "Room: a.105\nModel: NAEOTOM Alpha class\nCT-scan of the cardiology service. \nPseudo: admin\nPassword: serf34$QDfse\nLast review: 23/05/2025",
                 "status": "pending",
@@ -71,7 +73,7 @@ case "$1" in
                 "uuid": "",
                 "tags": []
             }'
-        curl -X GET http://${PUBLIC_IP_MANAGER}:3002/update_status
+        curl -X GET http://${PUBLIC_IP_MANAGER}:3002/update_status -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" 
         # curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
         #     -H "Content-Type: application/json" \
         #     -d '{
@@ -89,6 +91,7 @@ case "$1" in
         #     }'
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
             -H "Content-Type: application/json" \
+            -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" \
             -d '{
                 "from": "CT_CARDIO_104",
                 "to": "CARDIOLOGY_3",
@@ -104,6 +107,7 @@ case "$1" in
             }'
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
             -H "Content-Type: application/json" \
+            -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" \
             -d '{
                 "from": "CARDIOLOGY_4",
                 "to": "CT_CARDIO_104",
@@ -134,6 +138,7 @@ case "$1" in
         #     }'
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_edge \
         -H "Content-Type: application/json" \
+        -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" \
         -d '{
             "from": "CARDIOLOGY_4",
             "to": "CARDIOLOGY_3",
@@ -150,12 +155,12 @@ case "$1" in
 
         curl -X POST http://${PUBLIC_IP_MANAGER}:3002/add_remote_server \
         -H "Content-Type: application/json" \
+        -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NTExMjI4MTIsImlhdCI6MTc0OTkxMzIxMiwic3ViIjoiYWRtaW4ifQ.D87i-ZAPezQSIiphC8kN_YF3ADurX65-z3SMKDMC590" \
         -d '{
-            
             "username": "admin",
             "password": "password",
             "state": "pending",
-            "ip": "192.168.1.11",
+            "ip": "192.168.129.93",
             "publishedPortWeb": "8042",
             "publishedPortDicom": "4242"
         }'

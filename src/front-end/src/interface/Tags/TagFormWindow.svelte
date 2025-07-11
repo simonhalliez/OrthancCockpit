@@ -3,6 +3,7 @@
     import { env } from "$env/dynamic/public";
     import axios from "axios";
     import { tags } from '../../store/tags';
+    import { alertType, alertMessage } from '../../store/alert';
     import { selectedTags } from "../../store/selectedTags";
     import { network } from "../../store/network";
     import ButtonForm from "../Components/ButtonForm.svelte";
@@ -11,7 +12,9 @@
     export let node: DicomNode | null = null;
     export let tag: Tag | null = null;
 
-    const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+    
+    const baseUrl = env.PUBLIC_BASE_URL;
+
     let submitTags: Tag = {name: "", color: ""};
     let selectedTag: Tag = {name: "", color: ""};;
     let tagOptions: Tag[] = [];
@@ -36,14 +39,15 @@
     function submit() {
         // Edit a existing tag.
         if (tag) {
-            axios.post(`http://${ipManager}:3002/edit_tag`,
+            axios.put(`${baseUrl}/nodes/tags`,
                 {tagName: tag.name, newName: submitTags.name, newColor: submitTags.color})
                 .then(() => {
                     tags.updateTags();
                     network.updateNetwork();
                     selectedTags.updateTags(tag,submitTags);
-                }).catch((error: unknown) => {
-                    alert(error);
+                }).catch((error: any) => {
+                    alertType.set('danger');
+                    alertMessage.set(error.response.data.message || 'An error occurred while editing the tag');
                 });
         // Add a tag to a node and create it if it doesn't exist.
         } else if (node) {
@@ -56,7 +60,7 @@
                 alert("Please either select an existing tag or provide details for a new tag.");
                 return;
             }
-            axios.post(`http://${ipManager}:3002/tag_node`,
+            axios.post(`${baseUrl}/nodes/tags`,
                 {uuid: node.uuid, tagName: selectedTag.name || submitTags.name, color: selectedTag.color || submitTags.color})
                 .then(() => {
                     submitTags = {name: "", color: ""};
@@ -64,8 +68,9 @@
                     tags.updateTags();
                     network.updateNetwork();
                     
-                }).catch((error: unknown) => {
-                    alert(error);
+                }).catch((error: any) => {
+                    alertType.set('danger');
+                    alertMessage.set(error.response.data.message || 'An error occurred while adding the tag to the node');
                 });
         // Add a tag to the selected tags.        
         } else {

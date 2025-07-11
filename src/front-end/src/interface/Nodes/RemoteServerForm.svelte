@@ -3,6 +3,7 @@
     import axios from "axios";
     import { env } from "$env/dynamic/public";
     import { network } from '../../store/network';
+    import { alertType, alertMessage } from '../../store/alert';
 
     export let serverValues: OrthancServer;
     export let editMode: boolean = false;
@@ -21,11 +22,12 @@
         userId: "",
     };
     let user:OrthancUser = { ...userInit };
+    const baseUrl = env.PUBLIC_BASE_URL;
     const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
 
     function submit() {
         if (!editMode) {
-            axios.post(`http://${ipManager}:3002/add_remote_server`, {
+            axios.post(`${baseUrl}/nodes/orthanc-servers/remote`, {
                 ...user,
                 ip: serverValues.ip,
                 publishedPortWeb: serverValues.publishedPortWeb,
@@ -38,15 +40,17 @@
                     serverValues.publishedPortWeb = "";
                     serverValues.publishedPortDicom = "";
                 }) .catch((error: any) => {
-                    alert(error);
+                    alertType.set('danger');
+				    alertMessage.set(error.response.data.message || 'An error occurred while adding the remote server');
                 });
         } else {
             serverValues.status = "pending";
-            axios.post(`http://${ipManager}:3002/edit_server`, serverValues)
+            axios.put(`${baseUrl}/nodes/orthanc-servers/remote/${serverValues.uuid}`, serverValues)
 			.then( () => {
 				network.updateNetwork();
 			}) .catch((error: any) => {
-				alert(error);
+				alertType.set('danger');
+                alertMessage.set(error.response.data.message || 'An error occurred while editing the remote server');
 			});
         }
         showServerForm = false;

@@ -17,7 +17,7 @@ class UserService {
       MATCH (o:OrthancServer {uuid: $uuid})
       MERGE (u:User {userId: $userId})
       MERGE (o)-[link:HAS_USER]->(u)
-      SET link.state = $state,
+      SET link.state = "pending",
       u.username = $username,
       u.password = $password
       RETURN o`,
@@ -33,6 +33,7 @@ class UserService {
     if (!userResult.records[0].get('o').labels.includes("Remote")) {
       await this. orthancService.editServer(userResult.records[0].get('o').properties);
     }
+    return userId;
   }
 
   async removeUser(reqBody) {

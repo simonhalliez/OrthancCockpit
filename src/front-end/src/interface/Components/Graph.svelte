@@ -9,9 +9,11 @@
     import NodeDetails from '../Nodes/NodeDetails.svelte';
     import EdgeDetails from '../Edges/EdgeDetails.svelte';
     import TagSelector from '../Tags/TagSelector.svelte';
+    import { alertMessage, alertType } from '../../store/alert';
 
-    
     const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+    const baseUrl = env.PUBLIC_BASE_URL;
+
     let visNetwork: vis.Network;
     let edges: vis.DataSet<vis.Edge> = new vis.DataSet([]);
     let nodes: vis.DataSet<vis.Node> = new vis.DataSet([]);
@@ -116,11 +118,12 @@
             if (movedNode) {
                 movedNode.visX = event.pointer.canvas.x;
                 movedNode.visY = event.pointer.canvas.y;
-                axios.post(`http://${ipManager}:3002/update_node_position`, movedNode)
+                axios.put(`${baseUrl}/nodes/${movedNode.uuid}/position`, movedNode)
                 .then(response => {
                     network.updateNetwork();
                 }).catch(error => {
-                    alert(error);
+                    alertType.set('danger');
+				    alertMessage.set(error.response.data.message || 'An error occurred while adding the server');
                 });
             }
         }

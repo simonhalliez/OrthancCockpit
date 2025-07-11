@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const log = require('debug')('network-d');
 const { DockerService } = require('./docker-service');
+const { Neo4jDriver } = require('./neo4j-driver');
 const { UserService } = require('./user-service');
 const { setTimeout } = require('timers/promises');
 const { v4: uuidv4 } = require('uuid');
@@ -14,6 +15,18 @@ class OrthancService {
   constructor(neo4jDriver, dicomService) {
     this.neo4jDriver = neo4jDriver;
     this.dicomService = dicomService;
+  }
+
+  static async checkAetUnique(aet, uuid, tx) {
+    let result = await tx.run(`
+        MATCH (n:Node)
+        WHERE n.aet = $aet AND n.uuid <> $uuid
+        RETURN n`,
+        { aet, uuid }
+      );
+    if (result.records.length !== 0) {
+      throw new Error(`AET ${aet} is already in use by another Orthanc server.`);
+    }
   }
 
   static async createConfigurationFile(serverInfo, tx) {
@@ -111,6 +124,9 @@ class OrthancService {
       }
 
       reqBody.uuid = uuidv4();
+
+      // Check if the AET is unique.
+      await OrthancService.checkAetUnique(reqBody.aet, reqBody.uuid, tx);
       // Create the Docker secret for the Orthanc server with configuration.
       await OrthancService.createConfigurationFile(reqBody, tx);
 
@@ -135,7 +151,7 @@ class OrthancService {
       // Create the Orthanc server node in DB.
       newServerResult = await tx.run(`
         MATCH (n:SwarmNode {name: $hostNameSwarm})
-        MERGE (o:OrthancServer {uuid: $uuid}) 
+        MERGE (o:OrthancServer:Node {uuid: $uuid}) 
         MERGE (o)-[:RUNNING]->(n)
         MERGE (u:User {userId: $userId})
         MERGE (o)-[link:HAS_USER]->(u) 
@@ -146,7 +162,7 @@ class OrthancService {
         o.publishedPortDicom = $publishedPortDicom, 
         o.targetPortWeb = $targetPortWeb,
         o.targetPortDicom = $targetPortDicom,
-        o.status = $status, 
+        o.status = "pending", 
         o.visX = $visX, 
         o.visY = $visY,
         o.aet = $aet,
@@ -161,28 +177,6 @@ class OrthancService {
         {...reqBody,...res, password: encrypt(process.env.ADMIN_PASSWORD, process.env.ADMIN_PASSWORD), userId: createUserId("admin", process.env.ADMIN_PASSWORD, process.env.ADMIN_PASSWORD) }
         
       )
-      // Create the relationship between the Orthanc server and the Swarm node.
-      // await tx.run(`
-      //   MATCH (n:SwarmNode {name: $name})
-      //   MATCH (o:OrthancServer {uuid: $uuid})
-      //   MERGE (o)-[:RUNNING]->(n)
-      //   `,
-      //   {
-      //     name: reqBody.hostNameSwarm,
-      //     uuid: reqBody.uuid
-      //   }
-      // )
-      // await tx.run(`
-      //   MATCH (o:OrthancServer {uuid: $uuid})
-      //   MERGE (u:User {username: "admin", password: $password})
-      //   MERGE (o)-[link:HAS_USER]->(u) 
-      //   SET link.state = "pending"
-      //   `,
-      //   {
-      //     password: encrypt(process.env.ADMIN_PASSWORD, process.env.ADMIN_PASSWORD),
-      //     uuid: reqBody.uuid
-      //   }
-      // )
     })
     await session.close();
     return newServerResult.records[0].get('o').properties;  
@@ -238,18 +232,22 @@ class OrthancService {
     await session.close();
   }
 
-  async deleteServerSession(reqBody, tx) {
-    await DicomService.deleteConnectedOrthancServer(reqBody, tx);
+  async deleteModalitySession(uuid, tx) {
+    await DicomService.deleteConnectedOrthancServer(uuid, tx);
     try {
-      let deletedServerResponse = await tx.run(
+      let deletedModalityResponse = await tx.run(
         'MATCH (o {uuid: $uuid}) ' +
         'return o',
-        reqBody
+        { uuid }
       );
+
+      if (deletedModalityResponse.records.length === 0) {
+        throw new Error(`No Orthanc server found with uuid ${uuid}`);
+      }
       // Check if the request is for an Orthanc server.
-      if (deletedServerResponse.records[0].get('o').labels.includes("OrthancServer") &&
-          !deletedServerResponse.records[0].get('o').labels.includes("Remote")) {
-        const deletedServer = deletedServerResponse.records[0].get('o').properties;
+      if (deletedModalityResponse.records[0].get('o').labels.includes("OrthancServer") &&
+          !deletedModalityResponse.records[0].get('o').labels.includes("Remote")) {
+        const deletedServer = deletedModalityResponse.records[0].get('o').properties;
         // Remove the Docker service for the Orthanc server.
         const dockerRemoveResult = await DockerService.runCommand('docker', [
           'service', 'rm',
@@ -281,12 +279,14 @@ class OrthancService {
         }
       }
 
-      if (deletedServerResponse.records[0].get('o').labels.includes("Remote")) {
+      if (deletedModalityResponse.records[0].get('o').labels.includes("Remote")) {
         // If the server is a remote Orthanc server, shutdown it.
-        const user = await UserService.getValidUsers(reqBody.uuid, tx);
+        const user = await UserService.getValidUsers(uuid, tx);
+        const ip = await Neo4jDriver.recoverOrthancServerIp(uuid, tx);
+        const portWeb = deletedModalityResponse.records[0].get('o').properties.publishedPortWeb;
         try {
           const remoteServerResponse = await axios.post(
-            `http://${reqBody.ip}:${reqBody.publishedPortWeb}/tools/shutdown`,
+            `http://${ip}:${portWeb}/tools/shutdown`,
             {},
             {
               auth: {
@@ -303,17 +303,17 @@ class OrthancService {
       await tx.run(
         'MATCH (o {uuid: $uuid}) ' +
         'DETACH DELETE o',
-        reqBody
+        { uuid }
       );
     } catch (err) {
       throw new Error(`Error removing service: ${err.message}`);
     }
   }
 
-  async deleteServer(reqBody) {
+  async deleteModality(uuid) {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
-      await this.deleteServerSession(reqBody, tx);
+      await this.deleteModalitySession(uuid, tx);
     })
     await session.close();
   }
@@ -323,8 +323,9 @@ class OrthancService {
     await session.executeWrite( async (tx) => {
       // Check if the node exists in the database.
       let nodeResult = await tx.run(`
-        MATCH (n {uuid: $uuid})  
-        RETURN n`,
+        MATCH (n {uuid: $uuid}) 
+        OPTIONAL MATCH (n)-[:RUNNING]->(host) 
+        RETURN n, host`,
         reqBody
       )
       if (nodeResult.records.length === 0) {
@@ -333,11 +334,16 @@ class OrthancService {
       if (nodeResult.records.length > 1) {
         throw new Error(`Multiple nodes found with uuid ${reqBody.uuid}`);
       }
+
+      await OrthancService.checkAetUnique(reqBody.aet, reqBody.uuid, tx);
+
       let nodeProperties = nodeResult.records[0].get('n').properties;
-      let hostToIp = reqBody.ip;
+      let hostFromIp = nodeResult.records[0].get('host').properties.ip;
+      // Edit if the host changed.
+      let hostToIp = hostFromIp;
 
       // Get the IP of the new host.
-      if (!nodeResult.records[0].get('n').labels.includes("Remote") &&reqBody.hostNameSwarm !== nodeProperties.hostNameSwarm ) {
+      if (!nodeResult.records[0].get('n').labels.includes("Remote") && reqBody.hostNameSwarm !== nodeProperties.hostNameSwarm) {
         let newHostTo = await tx.run(`
           MATCH (host_to:SwarmNode{name: $hostNameSwarm}) 
           RETURN host_to`,
@@ -368,8 +374,8 @@ class OrthancService {
               "publishedPortWeb": publishedPortWeb,
               "targetPortDicom": reqBody.targetPortDicom,
               "targetPortWeb": reqBody.targetPortWeb,
-              "visX": 0,
-              "visY": 0,
+              "visX": nodeProperties.visX,
+              "visY": nodeProperties.visY,
               "status": "pending",
             };
             newServer = await this.addOrthancServer(new_server);
@@ -385,7 +391,7 @@ class OrthancService {
         }
         await DicomService.waitUntilServerUp(newServer.uuid, hostToIp, publishedPortWeb, tx);
         const edgeValue = {
-          "from": reqBody.aet,
+          "from": nodeProperties.aet,
           "to": newServer.aet,
           "status": false,
           "allowEcho": true,
@@ -398,10 +404,11 @@ class OrthancService {
           "uuidTo": ""
         }
 
-        // Add a connection between servers
+        // Add a connection between old and new servers
         await this.dicomService.addEdgeSession(edgeValue, tx);
+        
         // Transfer data between servers
-        await DicomService.transferAllInstances(reqBody.ip, nodeProperties.publishedPortWeb, newServer.uuid);
+        await DicomService.transferAllInstances(hostFromIp, nodeProperties.publishedPortWeb, newServer.uuid);
 
         // Create DICOM links.
         let bodiesToAddFromServer = await tx.run(`
@@ -447,7 +454,7 @@ class OrthancService {
           }
         }
         // Remove the old server.
-        await this.deleteServerSession(nodeProperties, tx);
+        await this.deleteModalitySession(nodeProperties.uuid, tx);
         // Change the nodeProperties and uuid of reqBody to change the port number and aet of the new server
         // to desired one.
         nodeProperties = newServer;
@@ -506,7 +513,7 @@ class OrthancService {
           o.publishedPortDicom = $publishedPortDicom, 
           o.targetPortWeb = $targetPortWeb,
           o.targetPortDicom = $targetPortDicom,
-          o.status = $status, 
+          o.status = "pending", 
           o.secretName = $secretName,
           o.configurationNumber = $configurationNumber
           `,
@@ -520,19 +527,16 @@ class OrthancService {
           DELETE r
           MERGE (h:Host {ip: $ip})
           MERGE (o)-[:RUNNING]->(h)
-          SET o.orthancName = $orthancName,
-              o.aet = $aet,  
-              o.publishedPortWeb = $publishedPortWeb, 
+          SET o.publishedPortWeb = $publishedPortWeb, 
               o.publishedPortDicom = $publishedPortDicom, 
-              o.targetPortWeb = $targetPortWeb,
-              o.targetPortDicom = $targetPortDicom,
-              o.status = $status
+              o.status = "pending"
           `,
           reqBody
         )
       }
     })
     await session.close();
+    return reqBody.uuid;
   }
 
   async addTag(reqBody) {
@@ -592,7 +596,7 @@ class OrthancService {
       reqBody.password = encrypt(reqBody.password, process.env.ADMIN_PASSWORD);
       await this.neo4jDriver.driver.executeQuery(`
         MERGE (h:Host {ip: $ip})
-        MERGE (o:OrthancServer {uuid: $uuid})
+        MERGE (o:OrthancServer:Node {uuid: $uuid})
         SET o:Remote
         MERGE (o)-[:RUNNING]->(h)
         MERGE (u:User {userId: $userId})
@@ -615,6 +619,7 @@ class OrthancService {
     } catch (error) {
       throw new Error(`Error retrieving remote server configuration: ${error.message}`);
     }
+    return reqBody.uuid;
   }
 }
 

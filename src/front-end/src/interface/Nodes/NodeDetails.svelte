@@ -9,11 +9,13 @@
     import TagFormWindow from "../Tags/TagFormWindow.svelte";
     import TagBadge from "../Tags/TagBadge.svelte";
     import UserDetails from "../Users/UserDetails.svelte";
+    import { alertMessage, alertType } from '../../store/alert';
 
     export let node: DicomNode;
     export let showNodeDetails: boolean = false;
 
     const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+    const baseUrl = env.PUBLIC_BASE_URL;
     let showServerEdit = false;
     let showModalityEdit = false;
     let showAddTag = false;
@@ -22,11 +24,12 @@
     function editServer() {
         if (node) {
             node.status = "pending";
-            axios.post(`http://${ipManager}:3002/edit_server`, node)
+            axios.put(`${baseUrl}/nodes/orthanc-servers/${node.uuid}`, node)
 			.then( () => {
 				network.updateNetwork();
 			}) .catch((error: any) => {
-				alert(error);
+				alertType.set('danger');
+                alertMessage.set(error.response.data.message || 'An error occurred while editing the server');
 			});
             showServerEdit = false;
             showNodeDetails = false;
@@ -36,11 +39,12 @@
     function editModality() {
         if (node) {
             node.status = "pending";
-            axios.post(`http://${ipManager}:3002/edit_modality`, node)
+            axios.put(`${baseUrl}/nodes/modalities/${node.uuid}`, node)
             .then( () => {
                 network.updateNetwork();
             }) .catch((error: any) => {
-                alert(error);
+                alertType.set('danger');
+                alertMessage.set(error.response.data.message || 'An error occurred while editing the modality');
             });
             showModalityEdit = false;
             showNodeDetails = false;
@@ -49,11 +53,12 @@
 
     function deleteNode() {
         if (node) {
-            axios.post(`http://${ipManager}:3002/delete_node`, node)
+            axios.delete(`${baseUrl}/nodes/${node.uuid}`)
             .then(() => {
                 network.updateNetwork();
             }).catch((error: unknown) => {
-                alert(error);
+                alertType.set('danger');
+                alertMessage.set(error.response.data.message || 'An error occurred while deleting the node');
             });
             showNodeDetails = false;
         }

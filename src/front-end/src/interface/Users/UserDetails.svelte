@@ -4,11 +4,12 @@
   import axios from "axios";
   import { env } from "$env/dynamic/public";
   import { network } from "../../store/network";
+  import { alertMessage, alertType } from '../../store/alert';
 
   export let showUserDetails: boolean = false;
   export let node: OrthancServer;
 
-  const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+  const baseUrl = env.PUBLIC_BASE_URL;
   let showUserForm: boolean = false;
 
   network.subscribe((n) => {
@@ -18,14 +19,12 @@
   });
 
   function deleteUser(user: OrthancUser) {
-    axios.post(`http://${ipManager}:3002/delete_user`, {
-      uuid: node.uuid,
-      userId: user.userId
-    }).then(() => {
+    axios.delete(`${baseUrl}/nodes/orthanc-servers/${node.uuid}/users/${user.userId}`).then(() => {
       // Remove the user from the local list
       node.users = node.users.filter(u => u.username !== user.username);
     }).catch(error => {
-      alert(`Error deleting user: ${error}`);
+      alertType.set('danger');
+      alertMessage.set(error.response.data.message || 'An error occurred while deleting the user');
     });
   }
 

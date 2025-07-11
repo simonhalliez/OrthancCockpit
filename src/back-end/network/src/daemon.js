@@ -1,3 +1,4 @@
+// Adapted from example code provided in the UCLouvain LINFO2145 course project
 const express = require('express')
 const logger = require('morgan')
 const bodyParser = require('body-parser')
@@ -10,11 +11,14 @@ server.use(logger('dev'))
 server.use(bodyParser.json())
 server.use(bodyParser.urlencoded({ extended: false }))
 server.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE')
-  res.header('Access-Control-Allow-Headers', 'Content-Type')
-  next()
-})
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200); // Respond OK to preflight
+  }
+  next();
+});
 
 server.use('/', app)
 

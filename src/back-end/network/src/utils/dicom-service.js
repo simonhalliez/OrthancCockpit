@@ -3,6 +3,7 @@ const axios = require('axios');
 const { encrypt } = require('./crypto');
 const { UserService } = require('./user-service');
 const { createUserId, decrypt } = require('./crypto');
+const { link } = require('../app');
 
 
 class DicomService {
@@ -76,12 +77,11 @@ class DicomService {
         log(`Orthanc health check failed: http://${ip}:${portWeb}/system`, err.message);
       }
       if (!isServerUp) {
-        // Optional: wait before retrying to avoid spamming
+        
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
     const userId = createUserId('admin', process.env.ADMIN_PASSWORD, process.env.ADMIN_PASSWORD);
-    const password = encrypt(process.env.ADMIN_PASSWORD, process.env.ADMIN_PASSWORD);
     const res = await tx.run(`
       MATCH (o:OrthancServer {uuid: $uuid})-[link:HAS_USER]->(u:User {userId: $userId})
       SET link.state = 'valid'
@@ -90,6 +90,7 @@ class DicomService {
         uuid: uuid,
         userId: userId
       });
+    return;
   }
 
   static async transferAllInstances(sourceIp, sourcePort, targetUuid) {
@@ -134,7 +135,7 @@ class DicomService {
     }
   }
 
-  static async deleteConnectedOrthancServer(nodeProperties, tx) {
+  static async deleteConnectedOrthancServer(uuid, tx) {
     // Update the 'from' Orthanc servers that are connected to the modified Orthanc server.
     let connectedOrthancServers = await tx.run(`
       MATCH (node {uuid: $uuid}) 
@@ -143,14 +144,14 @@ class DicomService {
       OPTIONAL MATCH (o)-[l:HAS_USER]->(u:User)
       WHERE l.state = "valid"
       RETURN server, host, collect({username: u.username, password: u.password}) AS users`,
-      nodeProperties
+      { uuid }
     );
     for (const connectedOrthancServer of connectedOrthancServers.records) {
       const serverFromProperties = connectedOrthancServer.get('server').properties;
       const hostFromProperties = connectedOrthancServer.get('host').properties;
       const user = connectedOrthancServer.get('users')[0];
       try {
-        await axios.delete(`http://${hostFromProperties.ip}:${serverFromProperties.publishedPortWeb}/modalities/${nodeProperties.uuid}`, 
+        await axios.delete(`http://${hostFromProperties.ip}:${serverFromProperties.publishedPortWeb}/modalities/${uuid}`, 
         {
           auth: {
             username: user.username,
@@ -158,9 +159,10 @@ class DicomService {
           }
         });
       } catch (error) {
-        log(`Request to delete the modality http://${hostFromProperties.ip}:${serverFromProperties.publishedPortDicom}/modalities/${nodeProperties.uuid} failed: ${error.message}`);
+        log(`Request to delete the modality http://${hostFromProperties.ip}:${serverFromProperties.publishedPortDicom}/modalities/${uuid} failed: ${error.message}`);
       }
     }
+    
   }
 
   async addEdgeSession(reqBody, tx) {
@@ -273,25 +275,31 @@ class DicomService {
         
     }
     // Create the connection in the database.
-    await tx.run(
-      'MATCH (n1 {aet: $from}) ' +
-      'MATCH (n2 {aet: $to}) ' +
-      'MERGE (n1)-[r:CONNECTED_TO]->(n2) ' +
-      'SET r.status = $status, ' +
-      'r.allowEcho = $allowEcho, ' +
-      'r.allowFind = $allowFind, ' +
-      'r.allowGet = $allowGet, ' +
-      'r.allowMove = $allowMove, ' +
-      'r.allowStore = $allowStore ',
+    let resLink =await tx.run(`
+      MATCH (n1 {aet: $from}) 
+      MATCH (n2 {aet: $to}) 
+      MERGE (n1)-[r:CONNECTED_TO]->(n2) 
+      SET r.status = $status,
+      r.allowEcho = $allowEcho,
+      r.allowFind = $allowFind,
+      r.allowGet = $allowGet,
+      r.allowMove = $allowMove,
+      r.allowStore = $allowStore
+      RETURN r
+      `,
       reqBody
     );
+    return resLink.records[0].get('r').elementId;
   }
+
   async addEdge(reqBody) {
     let session = this.neo4jDriver.driver.session();
+    let linkId = null;
     await session.executeWrite( async (tx) => {
-      await this.addEdgeSession(reqBody, tx);
+      linkId = await this.addEdgeSession(reqBody, tx);
     });
     await session.close();
+    return linkId;
   }
 
   async testDicomConnections() {
@@ -350,7 +358,7 @@ class DicomService {
     })
   }
 
-  async deleteLink(reqBody) {
+  async deleteLink(id) {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
       const modalities = await tx.run(`
@@ -361,10 +369,10 @@ class DicomService {
         OPTIONAL MATCH (m_to)-[:RUNNING]->(h_to)
         RETURN m_from, m_to, reversed_r, h_from, h_to
         `,
-        reqBody
+        { id: id }
       );
       if (modalities.records.length === 0) {
-        throw new Error(`No link found in the database between ${reqBody.from} and ${reqBody.to}`);
+        throw new Error(`No link found in the database with id ${id}`);
       }
       const isReverse = (modalities.records[0].get('reversed_r') !== null)
       // Check if the 'to' server is an Orthanc server.
@@ -404,7 +412,7 @@ class DicomService {
             });
           } catch (error) {
 
-            throw new Error(`Request to delete the modality to ${reqBody.to} failed: ${error.message}`);
+            throw new Error(`Request to delete the modality from ${modalities.records[0].get('m_from').properties.uuid} in modality to ${modalities.records[0].get('m_to').properties.uuid} failed: ${error.message}`);
           }
         }
       }
@@ -423,7 +431,7 @@ class DicomService {
             timeout : 5000
           });
         } catch (error) {
-          throw new Error(`Request to delete the modality to ${reqBody.to} failed: ${error.message}`);
+          throw new Error(`Request to delete the modality to ${modalities.records[0].get('m_to').properties.uuid} in from ${modalities.records[0].get('m_from').properties.uuid} failed: ${error.message}`);
         }
       }
 
@@ -433,7 +441,7 @@ class DicomService {
         WHERE elementId(r) = $id 
         DELETE r
         `,
-        reqBody
+        { id: id }
       );
     });
     await session.close();

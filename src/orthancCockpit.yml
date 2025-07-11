@@ -21,7 +21,7 @@ services:
   network-manager:
     image: network-service:latest
     ports:
-      - "3002:80"
+      - "${PORT_MANAGER}:80"
     environment:
       - PUBLIC_IP_DB=${PUBLIC_IP_MANAGER}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
@@ -42,7 +42,7 @@ services:
   #   ports: 
   #     - "3000:3000"
   #   environment:
-  #     - PUBLIC_IP_MANAGER=${PUBLIC_IP_MANAGER}
+  #     - PUBLIC_BASE_URL="http://${PUBLIC_IP_MANAGER}:${PORT_MANAGER}"
   #   deploy:
   #     replicas: 1
   #     restart_policy:

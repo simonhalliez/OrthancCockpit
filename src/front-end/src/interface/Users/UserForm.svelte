@@ -4,32 +4,33 @@
     import axios from "axios";
     import { env } from "$env/dynamic/public";
     import { network } from "../../store/network";
+    import { alertMessage, alertType } from '../../store/alert';
 
     export let showUserForm: boolean = false;
     export let orthancNode: OrthancServer;
 
-    const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+    const baseUrl = env.PUBLIC_BASE_URL;
 
     let userValues: OrthancUser = {
         username: "",
         state: "pending",
         password: "",
-        id: ""
+        userId: ""
     };
     let centeredWindowHeader = "Add a user to the Orthanc server " + orthancNode.orthancName;
     let submitText = "Add the user";
 
     function submit() {
         // Add a user to the orthancServer.
-        axios.post(`http://${ipManager}:3002/add_user`, {
-            uuid: orthancNode.uuid,
+        axios.post(`${baseUrl}/nodes/orthanc-servers/${orthancNode.uuid}/users`, {
             ...userValues
         })
         .then(() => {
             network.updateNetwork();
         })
         .catch(error => {
-            alert(`Error adding user: ${error}`);
+            alertType.set('danger');
+            alertMessage.set(error.response.data.message || 'An error occurred while adding the user');
         });
         showUserForm = false;
     }

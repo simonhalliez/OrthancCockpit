@@ -7,17 +7,22 @@ class ModalityService {
         this.neo4jDriver = neo4jDriver;
     }
     async addModality(reqBody) {
-        return await this.neo4jDriver.driver.executeQuery(`
-            MERGE (m:Modality {uuid: $uuid}) 
+        let uuid = uuidv4();
+        reqBody.visX = 0.0;
+        reqBody.visY = 0.0;
+        await this.neo4jDriver.driver.executeQuery(`
+            MERGE (m:Modality:Node {uuid: $uuid}) 
             SET m.aet = $aet, 
             m.ip = $ip, 
             m.publishedPortDicom = $publishedPortDicom, 
-            m.status = $status, 
+            m.status = "pending", 
             m.visX = $visX, 
             m.visY = $visY, 
             m.description = $description`,
-            {...reqBody, uuid: uuidv4()}
+            {...reqBody, uuid: uuid}
         );
+        return uuid;
+
     }
 
     async editModality(reqBody) {
@@ -29,9 +34,6 @@ class ModalityService {
                 SET m.aet = $aet, 
                 m.ip = $ip, 
                 m.publishedPortDicom = $publishedPortDicom, 
-                m.status = $status, 
-                m.visX = $visX, 
-                m.visY = $visY, 
                 m.description = $description 
                 RETURN m`,
                 reqBody

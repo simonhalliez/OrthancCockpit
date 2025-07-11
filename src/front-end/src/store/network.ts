@@ -3,7 +3,7 @@ import type { Writable } from "svelte/store";
 import axios from "axios";
 import { env } from "$env/dynamic/public";
 
-const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+const baseUrl = env.PUBLIC_BASE_URL;
 
 function createNetwork() {
     const { subscribe, set, update}: Writable<Network> = writable<Network>({nodes: [],edges: []})
@@ -12,7 +12,7 @@ function createNetwork() {
         subscribe,
         update,
         updateNetwork: () => {
-            axios.get(`http://${ipManager}:3002/network`)
+            axios.get(`${baseUrl}/network`)
             .then((res) => {
                 set(res.data.data);
             })
@@ -20,6 +20,9 @@ function createNetwork() {
                 console.log(err)
             })
         },
+        updateOrthancServers: () => {
+            axios.put(`${baseUrl}/orthanc-servers/update`, {});
+        }
     }
 }
 

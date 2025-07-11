@@ -1,15 +1,19 @@
 <script lang="ts">
-	import Graph from '../interface/Components/Graph.svelte';
-	import ButtonHeader from '../interface/Components/ButtonHeader.svelte';
+	import { onMount } from 'svelte';
 	import { goto } from "$app/navigation";
+	import { get } from 'svelte/store';
 	import { network } from '../store/network';
+	import { connectedUser } from '../store/connectedUser';
 	import axios from 'axios';
 	import { env } from "$env/dynamic/public";
+	import Graph from '../interface/Components/Graph.svelte';
+	import ButtonHeader from '../interface/Components/ButtonHeader.svelte';
     import ServerFromWindow from '../interface/Nodes/ServerFormWindow.svelte';
 	import EdgesFormWindow from '../interface/Edges/EdgesFormWindow.svelte';
 	import ModalityFormWindow from '../interface/Nodes/ModalityFormWindow.svelte';
+	import { alertMessage, alertType } from '../store/alert';
 
-	const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
+	const baseUrl = env.PUBLIC_BASE_URL;
 	let showAddServer = false;
 	let showAddLink = false;
 	let showAddModality = false;
@@ -64,12 +68,13 @@
 
 	function addServer() {
 
-		axios.post(`http://${ipManager}:3002/add_Orthanc_server`, addServerValues)
+		axios.post(`${baseUrl}/nodes/orthanc-servers`, addServerValues)
 			.then( () => {
 				network.updateNetwork();
 			})
 			.catch((error: any) => {
-				alert(error);
+				alertType.set('danger');
+				alertMessage.set(error.response.data.message || 'An error occurred while adding the server');
 			});
 		showAddServer = false;
 		addServerValues = { ...initialAddServerValues };
@@ -77,37 +82,47 @@
 	}
 
 	function addLink() {
-		axios.post(`http://${ipManager}:3002/add_edge`, addLinkValues)
+		axios.post(`${baseUrl}/edges`, addLinkValues)
 			.then( () => {
 				network.updateNetwork();
 			}) .catch((error: any) => {
-				alert(error);
+				alertType.set('danger');
+				alertMessage.set(error.response.data.message || 'An error occurred while adding the link');
 			});
 		showAddLink = false;
 		addLinkValues = { ...initialAddLinkValues };
 	}
 
 	function addModality() {
-		axios.post(`http://${ipManager}:3002/add_modality`, addModalityValues)
+		axios.post(`${baseUrl}/nodes/modalities`, addModalityValues)
 			.then( () => {
 				network.updateNetwork();
 			})
 			.catch((error: any) => {
-				alert(error);
+				alertType.set('danger');
+				alertMessage.set(error.response.data.message || 'An error occurred while adding the modality');
 			});
 		showAddModality = false;
 		addModalityValues = { ...initialModalityValues };
 	}
 
 	function clickLogo() {
-		axios.get(`http://${ipManager}:3002/update_status`)
+		axios.get(`${baseUrl}/network/update_status`)
 			.then(() => {
 				network.updateNetwork();
 			})
 			.catch((error: any) => {
-				alert(error);
+				alertType.set('danger');
+				alertMessage.set(error.response.data.message || 'An error occurred while updating the network status');
 			});
 	}
+
+	onMount(() => {
+        const user = get(connectedUser);
+        if (!user.isLogged) {
+            goto('/login');
+        }
+    });
 </script>
 
 <div class="d-flex flex-column min-vh-100" style="overflow: hidden;">
@@ -123,7 +138,7 @@
 			<ServerFromWindow bind:showServerForm={showAddServer} bind:serverValues={addServerValues} submit={addServer} editMode={false}/>
 			<ButtonHeader text="Add link" onClick={()=> showAddLink=true}/>
 			<EdgesFormWindow bind:showEdgeForm={showAddLink} bind:edgeValues={addLinkValues} submit={addLink} editMode={false}/>
-			<ButtonHeader text="Log out" onClick={()=>goto('/login')}/>
+			<ButtonHeader text="Log out" onClick={() => {connectedUser.set({ isLogged: false, token: null }); goto('/login');}}/>
 		</div>
 	</header>
   
