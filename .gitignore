@@ -12,6 +12,10 @@ node_modules
 .DS_Store
 Thumbs.db
 
+# Lock files
+package-lock.json
+**/package-lock.json
+
 # Env
 .env
 .env.*
