@@ -1,7 +1,7 @@
 <h1>This is the REST API of network service</h1>
 # OrthancCockpit REST API
 
-## Authentication
+# Authentication
 
 ### Login
 - **POST** `/login`
@@ -55,8 +55,43 @@
       "error": "..."
     }
     ```
-    
-## Servers
+---
+# Nodes
+
+### Delete A Node (A DICOM MODALITY)
+- **DELETE** `/nodes/:uuid`
+  - **Body:** `{ id: string }`
+  - **Response:** `{ status: "ok" }`
+
+### Update Node Position
+- **PUT** `/nodes/:uuid/position`
+  - **Body:** Position data
+    - visX: The X coordinate of the node (integer).
+    - visY: The Y coordinate of the node (integer).
+    ```json
+    {
+      "visX": 100,
+      "visY": 200
+    }
+    ```
+  - **Response:**
+    ```json
+    {
+      "status": "ok",
+      "uuid": "string"
+    }
+    ```
+    - `uuid`: The UUID of the updated node.
+  - **Error:**
+    ```json
+    {
+      "status": "error",
+      "message": "Failed to update node position: ...",
+      "error": "..."
+    }
+    ```
+
+## Orthanc Servers
 
 
 ### Get Orthanc Server by UUID
@@ -173,9 +208,53 @@
   - **Response:** `{ status: "ok", uuid: string }`
     - uuid: The Universally Unique Identifier of the node. It change if the host of the swarm change (string).
 
+## Orthanc Users
 
+### Add User to Orthanc Server
+Add a user to the OrthancServer if it is in the swarm, if not it just add the user in the database.
+- **POST** `/nodes/orthanc-servers/:uuid/users`
+  - **Body:** User data
+    - username: The username for the new user (string).
+    - password: The password for the new user (string).
+    ```json
+    {
+      "username": "string",
+      "password": "string"
+    }
+    ```
+  - **Response:**
+    ```json
+    {
+      "status": "ok",
+      "userId": "string"
+    }
+    ```
+    - `userId`: The unique identifier of the created user.
+  - **Error:**
+    ```json
+    {
+      "status": "error",
+      "message": "Failed to add user",
+      "error": "..."
+    }
+    ```
 
----
+### Delete User from Orthanc Server
+- **DELETE** `/nodes/orthanc-servers/:uuid/users/:userId`
+  - **Response:**
+    ```json
+    {
+      "status": "ok"
+    }
+    ```
+  - **Error:**
+    ```json
+    {
+      "status": "error",
+      "message": "Failed to delete user: ...",
+      "error": "..."
+    }
+    ```
 
 ## Modalities
 
@@ -226,107 +305,6 @@
   - **Response:** `{ status: "ok", uuid: string }`
     - uuid: The Universally Unique Identifier of the node. It change if the host of the swarm change (string).
 
----
-
-## Edges (DICOM Links)
-
-### Get Edge by ID
-- **GET** `/edges/:id`
-  - **Response:**
-    ```json
-    {
-      "status": "ok",
-      "data": { /* Edge object */ }
-    }
-    ```
-    - `data`: The edge object with the specified ID.
-  - **Error:**
-    ```json
-    {
-      "status": "error",
-      "message": "Failed to retrieve edge: ...",
-      "error": "..."
-    }
-    ```
-
-### Get All Edges
-- **GET** `/edges`
-  - **Response:**
-    ```json
-    {
-      "status": "ok",
-      "data": [ /* Array of edge objects */ ]
-    }
-    ```
-    - `data`: The list of all edges.
-  - **Error:**
-    ```json
-    {
-      "status": "error",
-      "message": "Failed to retrieve edges: ...",
-      "error": "..."
-    }
-    ```
-
-### Add Edge
-Add or edit an edge between two modalities. If one of them is an Orthanc Server, it add/edit the other modality with the correct settings to the Orthanc server.
-- **POST** `/edges`
-  - **Body:**
-    - from: The aet of the node (modality) from (string).
-    - to: The aet of the node (modality) to (string).
-    - allowEcho: Whether the to modality accept C-ECHO SCU commands issued by the from modality,
-    - allowFind: Whether the to modality accept C-FIND SCU commands issued by the from modality,
-    - allowGet: Whether the to modality accept C-GET SCU commands issued by the from modality,
-    - allowMove: Whether the to modality accept C-MOVE SCU commands issued by the from modality,
-    - allowStore: Whether the to modality accept C-STORE SCU commands issued by the from modality
-    ```json
-    {
-      "from": "string",
-      "to": "string",
-      "allowEcho": true,
-      "allowFind": false,
-      "allowGet": true,
-      "allowMove": true,
-      "allowStore": true
-    }
-    ```
-  - **Response:**
-    ```json
-    {
-      "status": "ok",
-      "id": "string"
-    }
-    ```
-    - `id`: The unique identifier of the created edge.
-  - **Error:**
-    ```json
-    {
-      "status": "error",
-      "message": "Failed to add edge: ...",
-      "error": "..."
-    }
-    ```
-
-### Delete Edge
-- **DELETE** `/edges/:id`
-  - **Response:**
-    ```json
-    {
-      "status": "ok",
-      "id": "string"
-    }
-    ```
-    - `id`: The unique identifier of the deleted edge.
-  - **Error:**
-    ```json
-    {
-      "status": "error",
-      "message": "Failed to delete the edge: ...",
-      "error": "..."
-    }
-    ```
-
----
 
 ## Tags
 
@@ -433,92 +411,110 @@ Add or edit an edge between two modalities. If one of them is an Orthanc Server,
       "error": "..."
     }
     ```
+
 ---
 
-## Users
+# Edges (DICOM Links)
 
-### Add User to Orthanc Server
-Add a user to the OrthancServer if it is in the swarm, if not it just add the user in the database.
-- **POST** `/nodes/orthanc-servers/:uuid/users`
-  - **Body:** User data
-    - username: The username for the new user (string).
-    - password: The password for the new user (string).
+### Get Edge by ID
+- **GET** `/edges/:id`
+  - **Response:**
     ```json
     {
-      "username": "string",
-      "password": "string"
+      "status": "ok",
+      "data": { /* Edge object */ }
+    }
+    ```
+    - `data`: The edge object with the specified ID.
+  - **Error:**
+    ```json
+    {
+      "status": "error",
+      "message": "Failed to retrieve edge: ...",
+      "error": "..."
+    }
+    ```
+
+### Get All Edges
+- **GET** `/edges`
+  - **Response:**
+    ```json
+    {
+      "status": "ok",
+      "data": [ /* Array of edge objects */ ]
+    }
+    ```
+    - `data`: The list of all edges.
+  - **Error:**
+    ```json
+    {
+      "status": "error",
+      "message": "Failed to retrieve edges: ...",
+      "error": "..."
+    }
+    ```
+
+### Add Edge
+Add or edit an edge between two modalities. If one of them is an Orthanc Server, it add/edit the other modality with the correct settings to the Orthanc server.
+- **POST** `/edges`
+  - **Body:**
+    - from: The aet of the node (modality) from (string).
+    - to: The aet of the node (modality) to (string).
+    - allowEcho: Whether the to modality accept C-ECHO SCU commands issued by the from modality,
+    - allowFind: Whether the to modality accept C-FIND SCU commands issued by the from modality,
+    - allowGet: Whether the to modality accept C-GET SCU commands issued by the from modality,
+    - allowMove: Whether the to modality accept C-MOVE SCU commands issued by the from modality,
+    - allowStore: Whether the to modality accept C-STORE SCU commands issued by the from modality
+    ```json
+    {
+      "from": "string",
+      "to": "string",
+      "allowEcho": true,
+      "allowFind": false,
+      "allowGet": true,
+      "allowMove": true,
+      "allowStore": true
     }
     ```
   - **Response:**
     ```json
     {
       "status": "ok",
-      "userId": "string"
+      "id": "string"
     }
     ```
-    - `userId`: The unique identifier of the created user.
+    - `id`: The unique identifier of the created edge.
   - **Error:**
     ```json
     {
       "status": "error",
-      "message": "Failed to add user",
+      "message": "Failed to add edge: ...",
       "error": "..."
     }
     ```
 
-### Delete User from Orthanc Server
-- **DELETE** `/nodes/orthanc-servers/:uuid/users/:userId`
+### Delete Edge
+- **DELETE** `/edges/:id`
   - **Response:**
     ```json
     {
-      "status": "ok"
+      "status": "ok",
+      "id": "string"
     }
     ```
+    - `id`: The unique identifier of the deleted edge.
   - **Error:**
     ```json
     {
       "status": "error",
-      "message": "Failed to delete user: ...",
+      "message": "Failed to delete the edge: ...",
       "error": "..."
     }
     ```
 
 ---
 
-### Delete A Node (A DICOM MODALITY)
-- **DELETE** `/nodes/:uuid`
-  - **Body:** `{ id: string }`
-  - **Response:** `{ status: "ok" }`
-
-### Update Node Position
-- **PUT** `/nodes/:uuid/position`
-  - **Body:** Position data
-    - visX: The X coordinate of the node (integer).
-    - visY: The Y coordinate of the node (integer).
-    ```json
-    {
-      "visX": 100,
-      "visY": 200
-    }
-    ```
-  - **Response:**
-    ```json
-    {
-      "status": "ok",
-      "uuid": "string"
-    }
-    ```
-    - `uuid`: The UUID of the updated node.
-  - **Error:**
-    ```json
-    {
-      "status": "error",
-      "message": "Failed to update node position: ...",
-      "error": "..."
-    }
-    ```
-
-## Root
+# Root
 
 ### API Info
 - **GET** `/`
