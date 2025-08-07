@@ -26,10 +26,13 @@
     ```json
     {
       "status": "ok",
-      "data": { /* Network object */ }
+      "data": {
+          "nodes": [ /* List of node object */],
+          "edges": [ /* List of edge object */]
+      }
     }
     ```
-    - `data`: The full network structure, including nodes, edges, and their relationships.
+    - `data`: The full network structure, including a list of nodes and a list of edges. There is three types of nodes: orthanc-servers, remote-orthanc-servers and DICOM modalities. Details of their structure are available in their respective routes, as are those of the edges.
   - **Error:**
     ```json
     {
@@ -92,7 +95,91 @@
     ```
 
 ## Orthanc Servers
-
+### Structure of a Orthanc Server
+  ```json
+    {
+      "secretName": "string",
+      "publishedPortWeb": "int",
+      "orthancName": "string",
+      "uuid": "string",
+      "visY": "float",
+      "visX": "float",
+      "targetPortWeb": "int",
+      "aet": "string",
+      "volumeName": "string",
+      "configurationNumber": "int",
+      "targetPortDicom": "int",
+      "serviceId": "string",
+      "publishedPortDicom": "int",
+      "hostNameSwarm": "string",
+      "status": "string",
+      "ip": "string",
+      "tags": [
+        {
+          "color": "string",
+          "name": "string"
+        }
+      ],
+      "users": [
+        {
+          "username": "string",
+          "userId": "string",
+          "state": "string",
+          "password": "string"
+        }
+      ]
+    }
+  ```
+- **Where:**
+  - secretName: Name of the Docker secret of the node.  
+  - publishedPortWeb: The published port for Web interaction with the server (`int`).  
+  - orthancName: Name of the Orthanc server for Orthanc (`string`).  
+  - uuid: Universally unique identifier of the node.  
+  - visY: The Y position of the node in the Vis.js map.  
+  - visX: The X position of the node in the Vis.js map.  
+  - targetPortWeb: The port exposed by the Orthanc server for HTTP requests and mapped with Docker (`int`).  
+  - aet: Application Entity Title of the server (`string`).  
+  - volumeName: Name of the Docker volume used by the server.  
+  - configurationNumber: Indicates the number of updates done on the node.  
+  - targetPortDicom: The port exposed by the Orthanc server for DICOM and mapped with Docker (`int`).  
+  - serviceId: The Docker service ID of the server in the Swarm.  
+  - publishedPortDicom: The published port for DICOM (`int`).  
+  - hostNameSwarm: The name of the Swarm node where the server will run (`string`).  
+  - status: State of the server.  
+  - ip: IP address of the Docker host.  
+  - tags: List of the tags of the server.  
+  - users: List of Orthanc users of the server, with their `username`, `userId`, `state`, and partially hidden `password` (first letter followed by `*`). 
+### Structure of a Remote Orthanc Server
+  ```json
+  {
+    "targetPortWeb": "int",
+    "aet": "string",
+    "publishedPortWeb": "int",
+    "orthancName": "string",
+    "targetPortDicom": "int",
+    "uuid": "string",
+    "visY": "float",
+    "publishedPortDicom": "int",
+    "status": "string",
+    "visX": "float",
+    "ip": "string",
+    "tags": [
+      {
+        "color": "string",
+        "name": "string"
+      }
+    ],
+    "users": [
+      {
+        "username": "string",
+        "userId": "string",
+        "state": "string",
+        "password": "string"
+      }
+    ]
+  }
+  ```
+- Details are similar to Orthanc Server
 
 ### Get Orthanc Server by UUID
 - **GET** `/nodes/orthanc-servers/:uuid`
@@ -103,7 +190,7 @@
       "data": { /* Orthanc server object */ }
     }
     ```
-    - `data`: The Orthanc server object with the specified UUID.
+    - `data`: The Orthanc server object with the specified UUID, can a remote Orthanc server.
   - **Error:** `{ status: "error", message: "...", error: "..." }`
 
 ### Get All Orthanc Servers
@@ -115,7 +202,7 @@
       "data": [ /* Array of Orthanc server objects */ ]
     }
     ```
-    - `data`: The list of all Orthanc servers.
+    - `data`: The list of all Orthanc servers including remote ones.
   - **Error:** `{ status: "error", message: "...", error: "..." }`
 
 
@@ -258,6 +345,26 @@ Add a user to the OrthancServer if it is in the swarm, if not it just add the us
 
 ## Modalities
 
+### Structure of a modality
+
+  ```json
+  {
+    "aet": "string",
+    "ip": "string",
+    "description": "string",
+    "uuid": "string",
+    "visY": "float",
+    "publishedPortDicom": "int",
+    "visX": "float",
+    "status": "string",
+    "tags": [
+      {
+        "color": "string",
+        "name": "string"
+      }
+    ]
+  }
+  ```
 ### Get Modality by UUID
 - **GET** `/nodes/modalities/:uuid`
   - **Response:**
@@ -307,7 +414,13 @@ Add a user to the OrthancServer if it is in the swarm, if not it just add the us
 
 
 ## Tags
-
+### Structure of tag object
+  ```json
+    {
+      "color": "string",
+      "name": "string"
+    }
+  ```
 ### Get Tags
 - **GET** `/nodes/tags`
   - **Response:**
@@ -415,7 +528,22 @@ Add a user to the OrthancServer if it is in the swarm, if not it just add the us
 ---
 
 # Edges (DICOM Links)
-
+### Structure of a Edge object
+```json
+  {
+    "from": "string",
+    "to": "string",
+    "uuidFrom": "string",
+    "uuidTo": "string",
+    "id": "string",
+    "allowMove": "boolean",
+    "allowFind": "boolean",
+    "allowStore": "boolean",
+    "allowEcho": "boolean",
+    "allowGet": "boolean",
+    "status": "string"
+  }
+```
 ### Get Edge by ID
 - **GET** `/edges/:id`
   - **Response:**
