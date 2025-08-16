@@ -11,8 +11,8 @@ OrthancCockpit enhances the operational efficiency of medical imaging infrastruc
 
 ## Features
 
-- **DICOM Network Visualization** – Real-time overview of interconnected DICOM entities in a interractive map.
-- **Orthanc Server Management** – Créez, modifiez, ajoutez/supprimez des utilisateurs et connectez facilement les serveurs Orthanc.
+- **DICOM Network Visualization** – Real-time overview of interconnected DICOM entities in an interractive map.
+- **Orthanc Server Management** – Create, modify, add/remove users, and easily connect Orthanc servers.
 - **Modality List Administration** – Simplify the organization and maintenance of modality configurations.
 - **Configuration Without CLI** – Eliminate the need for complex command-line operations.
 
@@ -56,9 +56,13 @@ The OrthancCockpit system is composed of two main components:
    git clone https://github.com/YourUsername/OrthancCockpit.git
    cd OrthancCockpit
    ```
-2. Move to the source file:
+2. Move to the source folder:
    ```bash
    cd src
+   ```
+3. Build and pull images:
+   ```bash
+   bash projectManager.sh build
    ```
 4. Initialize the project by running the setup script with your connection parameters:
    ```bash
@@ -78,16 +82,21 @@ The OrthancCockpit system is composed of two main components:
    ```
 5. Check that services are up:
    ```bash
-   docker service up
+   docker service ls
    ```
 6. Open the Web browser:
    ```http://<IP_ADDRESS>:<FRONTEND_PORT>```
+Stop the project with the following command. Note that all the created Orthanc servers are removed:
+   ```bash
+   bash projectManager.sh stop
+   ```
 ### Note: 
      The administrator password is used for the Neo4j database. Go to ```http://<IP_ADDRESS>:7474``` 
      and log in with the username neo4j and the password admin.
 ---
 
-## LicenseThis project is licensed under the [MIT License](LICENSE).
+## License
+This project is licensed under the [MIT License](LICENSE).
 
 
 
