@@ -1,5 +1,6 @@
 <script lang="ts">
-    import vis from 'vis';
+    import { Network as VisNetwork } from 'vis-network';
+    import { DataSet } from 'vis-data';
     import { onMount, onDestroy } from 'svelte';
     import { network } from '../../store/network';
     import { selectedTags } from '../../store/selectedTags';
@@ -11,13 +12,12 @@
     import TagSelector from '../Tags/TagSelector.svelte';
     import { alertMessage, alertType } from '../../store/alert';
 
-    const ipManager = env.PUBLIC_IP_MANAGER || "localhost";
     const baseUrl = env.PUBLIC_BASE_URL;
 
-    let visNetwork: vis.Network;
-    let edges: vis.DataSet<vis.Edge> = new vis.DataSet([]);
-    let nodes: vis.DataSet<vis.Node> = new vis.DataSet([]);
-    let networkData:Network = {nodes: [], edges: []};
+    let visNetwork: VisNetwork;
+    let edges: DataSet<any> = new DataSet([]);
+    let nodes: DataSet<any> = new DataSet([]);
+    let networkData: Network = { nodes: [], edges: [] };
     let showEdgeDetails = false;
     let showNodeDetails = false;
     let isIntersectMode = false;
@@ -179,7 +179,7 @@
         };
 
         if (container) {
-            visNetwork = new vis.Network(container, data, options);
+            visNetwork = new VisNetwork(container, data, options);
             visNetwork.on('click', handleClick);
             visNetwork.on('dragEnd', handleDragEnd);
         } else {

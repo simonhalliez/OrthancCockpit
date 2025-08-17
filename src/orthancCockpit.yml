@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
 
-  network-db:
-    image: neo4j:2025.02.0-bullseye
+  orthanc_cockpit-db:
+    image: neo4j:2025.07-bullseye
     ports: 
       - "7474:7474"
       - "7687:7687"
@@ -18,8 +18,8 @@ services:
       - network-db-data:/data
 
 
-  network-manager:
-    image: network-service:latest
+  orthanc_cockpit-backend:
+    image: orthanc_cockpit_back:latest
     ports:
       - "${PORT_MANAGER}:80"
     environment:
@@ -37,19 +37,19 @@ services:
     depends_on:
       - network-db
 
-  # front-end:
-  #   image: front-end:latest
-  #   ports: 
-  #     - "3000:3000"
-  #   environment:
-  #     - PUBLIC_BASE_URL="http://${PUBLIC_IP_MANAGER}:${PORT_MANAGER}"
-  #   deploy:
-  #     replicas: 1
-  #     restart_policy:
-  #       condition: on-failure
-  #   networks: [ "dicom-net" ]
-  #   depends_on:
-  #     - network-manager
+  orthanc_cockpit-frontend:
+    image: orthanc_cockpit_front:latest
+    ports: 
+      - "${PORT_FRONT}:3000"
+    environment:
+      - PUBLIC_BASE_URL=http://${PUBLIC_IP_MANAGER}:${PORT_MANAGER}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks: [ "dicom-net" ]
+    depends_on:
+      - network-manager
 
 networks:
   dicom-net:

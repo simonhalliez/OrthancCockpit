@@ -1,11 +1,23 @@
 const log = require('debug')('network-d');
 const { DockerService } = require('./docker-service');
 
+/**
+ * Service for managing Docker Swarm nodes in the Neo4j database.
+ * Handles adding, updating, and removing Swarm nodes based on Docker events.
+ */
 class SwarmService {
+    /**
+     * @param {Neo4jDriver} neo4jDriver - The Neo4j driver instance.
+     */
     constructor(neo4jDriver) {
         this.neo4jDriver = neo4jDriver;
     }
 
+    /**
+     * Adds a Swarm node to the Neo4j database by inspecting its Docker properties.
+     * @param {string} nodeID - The Docker node ID.
+     * @returns {Promise<void>}
+     */
     addNodeInDB(nodeID) {
         DockerService.runCommand('docker',
             ['inspect', nodeID, '--format', 'json']
@@ -28,7 +40,10 @@ class SwarmService {
         });
     }
 
-    
+    /**
+     * Adds all initial Swarm nodes to the Neo4j database by listing Docker nodes.
+     * @returns {Promise<void>}
+     */
     addInitialSwarmNodes() {
         DockerService.runCommand('docker', [
             'node', 'ls', '--format', 'json'
@@ -41,6 +56,11 @@ class SwarmService {
         });
     }
 
+    /**
+     * Listens for Docker Swarm node events and updates the Neo4j database accordingly.
+     * Adds nodes when they become ready and removes nodes when they go down.
+     * @returns {Promise<void>}
+     */
     async updateSwarmNodes() {
         const onSwarmEvent = async (line) => {
             const nodeEvent = JSON.parse(line);

@@ -3,18 +3,15 @@
     "start": "gulp --gulpfile gulpfile.js"
   },
   "dependencies": {
-    "axios": "1.8.2",
-    "body-parser": "1.17.1",
-    "debug": "2.6.6",
-    "express": "4.15.2",
-    "gulp": "4.0.2",
+    "axios": "1.11.0",
+    "body-parser": "2.2.0",
+    "debug": "4.4.1",
+    "express": "5.1.0",
+    "gulp": "5.0.1",
     "gulp-nodemon": "2.5.0",
-    "jwt-simple": "0.5.0",
-    "moment": "2.15.2",
-    "morgan": "1.8.1",
-    "nano": "6.4.3",
+    "jwt-simple": "0.5.6",
+    "morgan": "1.10.1",
     "neo4j-driver": "^5.28.1",
-    "node-docker-api": "^1.1.22",
     "uuid": "^11.1.0"
   },
   "overrides": {

@@ -2,10 +2,22 @@ const log = require('debug')('network-d');
 const { v4: uuidv4 } = require('uuid');
 const { DicomService } = require('./dicom-service');
 
+/**
+ * Service for managing Modality nodes in the Neo4j database and synchronizing with Orthanc servers.
+ */
 class ModalityService {
+    /**
+     * @param {Neo4jDriver} neo4jDriver - The Neo4j driver instance.
+     */
     constructor(neo4jDriver) {
         this.neo4jDriver = neo4jDriver;
     }
+
+    /**
+     * Adds a new Modality node to the database.
+     * @param {object} reqBody - The modality properties (aet, ip, publishedPortDicom, description, etc.).
+     * @returns {Promise<string>} The UUID of the newly created modality.
+     */
     async addModality(reqBody) {
         let uuid = uuidv4();
         reqBody.visX = 0.0;
@@ -25,6 +37,11 @@ class ModalityService {
 
     }
 
+    /**
+     * Edits an existing Modality node and updates its configuration on connected Orthanc servers.
+     * @param {object} reqBody - The updated modality properties (must include uuid).
+     * @returns {Promise<void>}
+     */
     async editModality(reqBody) {
         let session =this.neo4jDriver.driver.session();
         await session.executeWrite( async (tx) => {
@@ -34,7 +51,8 @@ class ModalityService {
                 SET m.aet = $aet, 
                 m.ip = $ip, 
                 m.publishedPortDicom = $publishedPortDicom, 
-                m.description = $description 
+                m.description = $description,
+                m.status = "pending"
                 RETURN m`,
                 reqBody
             );
@@ -45,6 +63,11 @@ class ModalityService {
         
     }
 
+    /**
+     * Updates the status of all Modality nodes based on their connections to Orthanc servers.
+     * Sets status to 'up' if there is at least one active connection, otherwise sets to 'pending'.
+     * @returns {Promise<void>}
+     */
     async updateModalitiesStatus() {
         try {
             let session = this.neo4jDriver.driver.session();

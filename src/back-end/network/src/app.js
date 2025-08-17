@@ -23,6 +23,8 @@ const userService = new UserService(neo4jDriver, orthancService);
 swarmService.addInitialSwarmNodes();
 swarmService.updateSwarmNodes();
 
+// --- Details of each route is available in the readme.md ---
+
 // Identification routes
 app.use((req, res, next) => {
   // Log the request method and path
@@ -403,7 +405,6 @@ app.delete('/nodes/tags/:tagName', (req, res) => {
 });
 
 // User routes
-
 app.post('/nodes/orthanc-servers/:uuid/users', (req, res) => {
   return userService.addUser({ ...req.body, uuid: req.params.uuid }).then((userId) => {
     return res.status(200).json({

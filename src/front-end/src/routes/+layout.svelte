@@ -4,6 +4,8 @@
 	import { connectedUser } from "../store/connectedUser";
 	import { get } from "svelte/store";
     import { alertMessage, alertType } from '../store/alert';
+    import 'bootstrap/dist/css/bootstrap.min.css';
+    import 'bootstrap-icons/font/bootstrap-icons.css';
 
     axios.interceptors.request.use(
     config => {

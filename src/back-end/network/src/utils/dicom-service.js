@@ -1,16 +1,29 @@
 const log = require('debug')('network-d');
 const axios = require('axios');
-const { encrypt } = require('./crypto');
 const { UserService } = require('./user-service');
 const { createUserId, decrypt } = require('./crypto');
-const { link } = require('../app');
 
-
+/**
+ * Service for DICOM operations between Orthanc servers and modalities.
+ */
 class DicomService {
+  /**
+   * @param {Neo4jDriver} neo4jDriver - The Neo4j driver instance.
+   */
   constructor(neo4jDriver) {
     this.neo4jDriver = neo4jDriver;
   }
 
+   /**
+   * Adds or updates a modality on an Orthanc server via HTTP PUT.
+   * @param {string} serverIp - IP address of the Orthanc server.
+   * @param {number|string} serverPublishedPortWeb - Web port of the Orthanc server.
+   * @param {string} modalityId - UUID of the modality.
+   * @param {string} username - Username for authentication.
+   * @param {string} encryptedPassword - Encrypted password for authentication.
+   * @param {object} payload - Modality configuration payload.
+   * @returns {Promise<void>}
+   */
   static async putModalityToOrthancServer(serverIp, serverPublishedPortWeb, modalityId, username, encryptedPassword, payload) {
     try {
       const response = await axios.put(
@@ -30,6 +43,13 @@ class DicomService {
     }
   }
 
+  /**
+   * Updates modalities on Orthanc servers that are connected to a modified server.
+   * @param {object} nodeProperties - Properties of the modified node.
+   * @param {string} hostToIp - IP address of the host.
+   * @param {object} tx - Neo4j transaction.
+   * @returns {Promise<void>}
+   */
   static async updateConnectedOrthancServer(nodeProperties, hostToIp, tx) {
     // Update the 'from' Orthanc servers that are connected to the modified Orthanc server.
     let connectedOrthancServers = await tx.run(`
@@ -60,6 +80,14 @@ class DicomService {
     }
   }
 
+  /**
+   * Waits until an Orthanc server is up and marks its user link as valid in the database.
+   * @param {string} uuid - UUID of the Orthanc server.
+   * @param {string} ip - IP address of the server.
+   * @param {number|string} portWeb - Web port of the server.
+   * @param {object} tx - Neo4j transaction.
+   * @returns {Promise<void>}
+   */
   static async waitUntilServerUp(uuid, ip, portWeb, tx) {
     let isServerUp = false;
 
@@ -93,6 +121,13 @@ class DicomService {
     return;
   }
 
+  /**
+   * Transfers all DICOM instances from a source Orthanc server to a target modality.
+   * @param {string} sourceIp - IP address of the source Orthanc server.
+   * @param {number|string} sourcePort - Web port of the source Orthanc server.
+   * @param {string} targetUuid - UUID of the target modality.
+   * @returns {Promise<void>}
+   */
   static async transferAllInstances(sourceIp, sourcePort, targetUuid) {
     // Get all instances from source
     let instanceIds;
@@ -135,8 +170,14 @@ class DicomService {
     }
   }
 
+  /**
+   * Deletes modality from Orthanc servers modality list that are connected to the given modality.
+   * @param {string} uuid - UUID of the modality.
+   * @param {object} tx - Neo4j transaction.
+   * @returns {Promise<void>}
+   */
   static async deleteConnectedOrthancServer(uuid, tx) {
-    // Update the 'from' Orthanc servers that are connected to the modified Orthanc server.
+    // Update the modality that is removed in the Orthanc modality list.
     let connectedOrthancServers = await tx.run(`
       MATCH (node {uuid: $uuid}) 
       MATCH (node)-[:CONNECTED_TO]-(server:OrthancServer) 
@@ -165,6 +206,12 @@ class DicomService {
     
   }
 
+  /**
+   * Adds a DICOM edge (connection) between two servers or modalities in the database and configures modalities.
+   * @param {object} reqBody - Request body containing edge properties.
+   * @param {object} tx - Neo4j transaction.
+   * @returns {Promise<string>} The elementId of the created link.
+   */
   async addEdgeSession(reqBody, tx) {
     let serverFrom = null;
     let serverTo = null;
@@ -292,6 +339,11 @@ class DicomService {
     return resLink.records[0].get('r').elementId;
   }
 
+  /**
+   * Adds a DICOM edge (connection) between two servers/modalities.
+   * @param {object} reqBody - Request body containing edge properties.
+   * @returns {Promise<string>} The elementId of the created link.
+   */
   async addEdge(reqBody) {
     let session = this.neo4jDriver.driver.session();
     let linkId = null;
@@ -302,6 +354,10 @@ class DicomService {
     return linkId;
   }
 
+  /**
+   * Tests all DICOM connections starting from Orthanc servers and updates their status in the database.
+   * @returns {Promise<void>}
+   */
   async testDicomConnections() {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
@@ -358,6 +414,11 @@ class DicomService {
     })
   }
 
+  /**
+   * Deletes a DICOM link (connection) by its elementId and updates modalities on involved servers.
+   * @param {string} id - The elementId of the link to delete.
+   * @returns {Promise<void>}
+   */
   async deleteLink(id) {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {

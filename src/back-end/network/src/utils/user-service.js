@@ -2,12 +2,27 @@ const { encrypt, decrypt, createUserId } = require('./crypto');
 const axios = require('axios');
 const log = require('debug')('network-d');
 
+/**
+ * Service for managing users associated with Orthanc servers in the Neo4j database.
+ * Handles adding, removing, validating users, and updating their state.
+ */
 class UserService {
+  /**
+   * @param {Neo4jDriver} neo4jDriver - The Neo4j driver instance.
+   * @param {OrthancService} orthancService - The OrthancService instance.
+   */
   constructor(neo4jDriver, orthancService) {
     this.neo4jDriver = neo4jDriver;
     this.orthancService = orthancService;
   }
 
+  /**
+   * Adds a user to an Orthanc server node.
+   * Encrypts the password before storing and updates the server configuration if needed.
+   * @param {object} reqBody - Contains username, password, and uuid of the Orthanc server.
+   * @returns {Promise<string>} The userId of the created user.
+   * @throws {Error} If the node is not found.
+   */
   async addUser(reqBody) {
     let userResult;
     // Encrypt the password before storing it in the database.
@@ -36,6 +51,13 @@ class UserService {
     return userId;
   }
 
+  /**
+   * Removes a user from an Orthanc server node.
+   * Updates the server configuration if needed.
+   * @param {object} reqBody - Contains userId and uuid of the Orthanc server.
+   * @returns {Promise<void>}
+   * @throws {Error} If the user is not found.
+   */
   async removeUser(reqBody) {
     
     let userResult = await this.neo4jDriver.driver.executeQuery(`
@@ -51,6 +73,11 @@ class UserService {
     }
   }
 
+  /**
+   * Updates the state of all user links to Orthanc servers by testing credentials.
+   * Sets state to 'valid', 'invalid', or 'pending' based on the test result.
+   * @returns {Promise<void>}
+   */
   async updateUserState() {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
@@ -59,7 +86,6 @@ class UserService {
             MATCH (o)-[:RUNNING]->(n) 
             RETURN o {.*} AS orthancServer, u {.*} AS user, n.ip as nodeIp`
         );
-
         for (const record of userConnections.records) {
             let orthancServer;
             let user;
@@ -85,7 +111,6 @@ class UserService {
                 state = 'invalid';
                 log(`User ${user.username} on Orthanc server ${orthancServer.uuid} is invalid: ${err.message}`);
             }
-
             await tx.run(`
                 MATCH (o:OrthancServer{uuid: $uuid})-[r:HAS_USER]->(u:User {username: $username, password: $password})
                 SET r.state = $state
@@ -98,11 +123,17 @@ class UserService {
                 }
             );   
         }
-
     })
     await session.close();
   }
 
+  /**
+   * Gets the properties of a valid user for a given Orthanc server within a transaction.
+   * @param {string} orthancServerUuid - UUID of the Orthanc server.
+   * @param {object} tx - Neo4j transaction.
+   * @returns {Promise<object>} Properties of the valid user.
+   * @throws {Error} If no valid user is found.
+   */
   static async getValidUsers(orthancServerUuid, tx) {
     let userConnections = await tx.run(`
       MATCH (o:OrthancServer {uuid: $uuid})-[r:HAS_USER]->(u:User)

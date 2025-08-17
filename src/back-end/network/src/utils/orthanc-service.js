@@ -10,13 +10,27 @@ const { DicomService } = require('./dicom-service');
 const { encrypt, decrypt, createUserId } = require('./crypto');
 const axios = require('axios');
 
-
+/**
+ * Service for managing Orthanc servers in the Neo4j database and synchronizing with Docker and DICOM services.
+ * Handles creation, update, deletion, status checks, and configuration file generation for Orthanc servers.
+ */
 class OrthancService {
+  /**
+   * @param {Neo4jDriver} neo4jDriver - The Neo4j driver instance.
+   * @param {DicomService} dicomService - The DicomService instance.
+   */
   constructor(neo4jDriver, dicomService) {
     this.neo4jDriver = neo4jDriver;
     this.dicomService = dicomService;
   }
 
+  /**
+   * Checks if an AET is unique among all nodes except the one with the given UUID.
+   * @param {string} aet - The AET to check.
+   * @param {string} uuid - The UUID to exclude from the check.
+   * @param {object} tx - Neo4j transaction.
+   * @throws {Error} If the AET is already in use.
+   */
   static async checkAetUnique(aet, uuid, tx) {
     let result = await tx.run(`
         MATCH (n:Node)
@@ -29,6 +43,12 @@ class OrthancService {
     }
   }
 
+  /**
+   * Creates a configuration file for an Orthanc server based on its modalities and users.
+   * @param {object} serverInfo - Information about the Orthanc server.
+   * @param {object} tx - Neo4j transaction.
+   * @returns {Promise<void>}
+   */
   static async createConfigurationFile(serverInfo, tx) {
     let secretName = `sec_${serverInfo.uuid}_V${serverInfo.configurationNumber}`;
     // Add the modality to the Orthanc server, they are not stored on this host.
@@ -102,6 +122,11 @@ class OrthancService {
     });
   }
 
+  /**
+   * Adds a new Orthanc server to the database and creates its Docker service.
+   * @param {object} reqBody - Properties for the new Orthanc server.
+   * @returns {Promise<object>} Properties of the created Orthanc server.
+   */
   async addOrthancServer(reqBody) {
     reqBody.visX = 0.0;
     reqBody.visY = 0.0;
@@ -182,6 +207,11 @@ class OrthancService {
     return newServerResult.records[0].get('o').properties;  
   }
 
+  /**
+   * Updates the status of all Orthanc servers by checking their health endpoints.
+   * Sets status to 'up' or 'down' and updates properties from the live server.
+   * @returns {Promise<void>}
+   */
   async updateServerStatus() {
     const session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
@@ -232,6 +262,12 @@ class OrthancService {
     await session.close();
   }
 
+  /**
+   * Deletes a modality or Orthanc server from the database and cleans up Docker resources.
+   * @param {string} uuid - UUID of the modality or server to delete.
+   * @param {object} tx - Neo4j transaction.
+   * @returns {Promise<void>}
+   */
   async deleteModalitySession(uuid, tx) {
     await DicomService.deleteConnectedOrthancServer(uuid, tx);
     try {
@@ -310,6 +346,11 @@ class OrthancService {
     }
   }
 
+  /**
+   * Deletes a modality or Orthanc server by UUID.
+   * @param {string} uuid - UUID of the modality or server to delete.
+   * @returns {Promise<void>}
+   */
   async deleteModality(uuid) {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
@@ -318,6 +359,12 @@ class OrthancService {
     await session.close();
   }
 
+  /**
+   * Edits an Orthanc server's properties, handles host changes, port changes, and data migration if needed.
+   * Updates Docker secrets and configuration files as required.
+   * @param {object} reqBody - Updated properties for the Orthanc server.
+   * @returns {Promise<string>} UUID of the updated server.
+   */
   async editServer(reqBody) {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
@@ -334,9 +381,9 @@ class OrthancService {
       if (nodeResult.records.length > 1) {
         throw new Error(`Multiple nodes found with uuid ${reqBody.uuid}`);
       }
-
-      await OrthancService.checkAetUnique(reqBody.aet, reqBody.uuid, tx);
-
+      if (!nodeResult.records[0].get('n').labels.includes("Remote")) {
+        await OrthancService.checkAetUnique(reqBody.aet, reqBody.uuid, tx);
+      }
       let nodeProperties = nodeResult.records[0].get('n').properties;
       let hostFromIp = nodeResult.records[0].get('host').properties.ip;
       // Edit if the host changed.
@@ -539,6 +586,11 @@ class OrthancService {
     return reqBody.uuid;
   }
 
+  /**
+   * Adds a tag to a node (Orthanc server or modality).
+   * @param {object} reqBody - Contains uuid, tagName, color.
+   * @returns {Promise<void>}
+   */
   async addTag(reqBody) {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
@@ -557,6 +609,11 @@ class OrthancService {
     await session.close();
   }
 
+  /**
+   * Removes a tag from a node.
+   * @param {object} reqBody - Contains uuid, tagName.
+   * @returns {Promise<void>}
+   */
   async untagNode(reqBody) {
     let session = this.neo4jDriver.driver.session();
     await session.executeWrite( async (tx) => {
@@ -575,6 +632,11 @@ class OrthancService {
     await session.close();
   }
 
+  /**
+   * Adds a remote Orthanc server to the database by retrieving its configuration via HTTP.
+   * @param {object} reqBody - Properties for the remote server (ip, publishedPortWeb, username, password, etc.).
+   * @returns {Promise<string>} UUID of the created remote server.
+   */
   async addRemoteServer(reqBody) {
     // Retrieve the remote Orthanc server configuration.
     try {

@@ -8,7 +8,7 @@ import CenteredWindow from "../Components/CenteredWindow.svelte";
     export let showEdgeForm: boolean = false;
 
     let centeredWindowHeader = "Add a DICOM link";
-    let submitText = "Add a server";
+    let submitText = "Add a link";
     if (editMode) {
         centeredWindowHeader = "Edit Orthanc link";
         submitText = "Apply changes to the link";

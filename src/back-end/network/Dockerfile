@@ -1,5 +1,5 @@
 # this image relies on the nodejs image
-FROM node:20-alpine
+FROM node:24-alpine
 # set working directory
 WORKDIR /usr/src/network
 
@@ -25,5 +25,5 @@ RUN apk update && apk add bash && apk add curl && apk add jq
 # header for loggining messages
 ENV DEBUG network-d
 
-# we now use an script to deploy the authentication service
+# we now use an script to deploy the network service
 CMD npm start
