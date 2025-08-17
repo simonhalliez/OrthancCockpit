@@ -9,17 +9,4 @@ gulp.task('start', () => {
   })
 })
 
-// gulp.task('start', (cb) => {
-//   exec('node ./src/daemon', (err, stdout, stderr) => {
-//     if (err) {
-//       console.error(`Error: ${err.message}`);
-//       return cb(err);
-//     }
-//     console.log(stdout);
-//     console.error(stderr);
-//     cb();
-//   });
-// });
-
-
 gulp.task('default', gulp.series('start'))
